@@ -1,0 +1,83 @@
+# Hysteria2 Configuration Presets
+# Оптимизация для различных типов сетей
+
+# Конфигурация по умолчанию
+default:
+  # Скорость (Mbps)
+  up_mbps: 100
+  down_mbps: 100
+
+  # Обфускация
+  obfs: salamander
+  obfs_password: "${AUTO_GENERATE}"
+
+  # QUIC параметры
+  quic:
+    initStreamReceiveWindow: 8388608
+    maxStreamReceiveWindow: 8388608
+    initConnReceiveWindow: 20971520
+    maxConnReceiveWindow: 20971520
+    maxIdleTimeout: 30s
+    keepAlivePeriod: 10s
+
+  # Конгестион-контроль
+  congestionControl: brutal
+  brutal:
+    enabled: true
+    up_mbps: 100
+    down_mbps: 100
+
+# Оптимизация для мобильных сетей РФ
+mobile_ru:
+  up_mbps: 50
+  down_mbps: 50
+
+  quic:
+    initStreamReceiveWindow: 4194304
+    maxStreamReceiveWindow: 4194304
+    initConnReceiveWindow: 10485760
+    maxConnReceiveWindow: 10485760
+    maxIdleTimeout: 60s
+    keepAlivePeriod: 20s
+
+  congestionControl: brutal
+  brutal:
+    enabled: true
+    up_mbps: 50
+    down_mbps: 50
+
+# Для нестабильных соединений
+unstable:
+  up_mbps: 30
+  down_mbps: 30
+
+  quic:
+    initStreamReceiveWindow: 2097152
+    maxStreamReceiveWindow: 2097152
+    initConnReceiveWindow: 5242880
+    maxConnReceiveWindow: 5242880
+    maxIdleTimeout: 90s
+    keepAlivePeriod: 15s
+
+  congestionControl: bbr
+  brutal:
+    enabled: false
+
+# Высокоскоростной (для оптоволокна)
+high_speed:
+  up_mbps: 500
+  down_mbps: 500
+
+  quic:
+    initStreamReceiveWindow: 16777216
+    maxStreamReceiveWindow: 16777216
+    initConnReceiveWindow: 41943040
+    maxConnReceiveWindow: 41943040
+    maxIdleTimeout: 30s
+    keepAlivePeriod: 10s
+
+  congestionControl: brutal
+  brutal:
+    enabled: true
+    up_mbps: 500
+    down_mbps: 500
