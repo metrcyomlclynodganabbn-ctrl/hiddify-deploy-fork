@@ -1,0 +1,39 @@
+# Hiddify Manager Auto-Deploy v2.1 - Python Dependencies
+# Telegram Bot + Database + Utilities
+
+# === Core Telegram ===
+aiogram>=3.5.0,<4.0.0
+python-telegram-bot>=20.0
+
+# === Database ===
+# SQLAlchemy 2.0+ for async ORM (будущая миграция на PostgreSQL)
+sqlalchemy>=2.0.0
+alembic>=1.12.0
+
+# === Current: SQLite ===
+# Встроен в Python 3.7+, не требует установки
+
+# === QR Code Generation (v2.1) ===
+qrcode>=8.0
+pillow>=10.0
+
+# === Utilities ===
+python-dotenv>=1.0.0
+requests>=2.31.0
+
+# === Hiddify API ===
+# pyhiddify (если доступен) или requests к Hiddify API
+# pyhiddify>=1.0.0
+
+# === Monitoring (опционально) ===
+psutil>=5.9.0
+
+# === Logging ===
+loguru>=0.7.0
+
+# === Development (не для продакшена) ===
+# pytest>=7.4.0
+# pytest-asyncio>=0.21.0
+# black>=23.0.0
+# flake8>=6.0.0
+# mypy>=1.5.0
