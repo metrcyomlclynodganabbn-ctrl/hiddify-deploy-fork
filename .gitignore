@@ -21,3 +21,4 @@ venv/
 *.db
 *.sqlite
 *.sqlite3
+.worktrees/
