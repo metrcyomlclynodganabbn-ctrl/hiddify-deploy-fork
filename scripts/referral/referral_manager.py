@@ -13,8 +13,8 @@ from typing import Optional, Dict, List
 from datetime import datetime, timedelta
 from decimal import Decimal
 
-from ..database.connection import get_db_connection
-from ..database.models import ReferralCreate, ReferralResponse, ReferralStats
+from scripts.database.connection import get_db_connection
+from scripts.database.models import ReferralCreate, ReferralResponse, ReferralStats
 
 logger = logging.getLogger(__name__)
 

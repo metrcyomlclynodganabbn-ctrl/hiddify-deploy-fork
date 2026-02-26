@@ -24,9 +24,9 @@ except ImportError:
     AIOHTTP_AVAILABLE = False
     web = None
 
-from ..cache.redis_client import redis_client
-from ..hiddify_api import HiddifyAPI
-from ..database.connection import get_db_connection
+from scripts.cache.redis_client import redis_client
+from scripts.hiddify_api import HiddifyAPI
+from scripts.database.connection import get_db_connection
 
 logger = logging.getLogger(__name__)
 

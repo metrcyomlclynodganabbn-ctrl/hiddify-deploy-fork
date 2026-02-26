@@ -19,7 +19,7 @@ try:
 except ImportError:
     stripe = None
 
-from ..database.models import (
+from scripts.database.models import (
     PaymentCreate, PaymentResponse,
     PaymentMethod, PaymentStatus, PaymentProvider
 )

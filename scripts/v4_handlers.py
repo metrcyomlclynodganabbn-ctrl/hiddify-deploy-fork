@@ -20,15 +20,15 @@ logger = logging.getLogger(__name__)
 
 # Попытка импортировать v4.0 модули
 try:
-    from payments.stripe_client import stripe_client, init_stripe_client
-    from payments.promo_client import promo_client, PromoCodeType
-    from support.ticket_manager import ticket_manager
-    from referral.referral_manager import referral_manager
-    from config.standard_builder import build_standard_config, generate_vless_url
-    from config.enhanced_builder import build_enhanced_config, generate_vless_url_enhanced, get_config_recommendation
-    from cache.redis_client import redis_client, init_redis
-    from monitoring.metrics import metrics, track_message_duration
-    from database.models import (
+    from scripts.payments.stripe_client import stripe_client, init_stripe_client
+    from scripts.payments.promo_client import promo_client, PromoCodeType
+    from scripts.support.ticket_manager import ticket_manager
+    from scripts.referral.referral_manager import referral_manager
+    from scripts.config.standard_builder import build_standard_config, generate_vless_url
+    from scripts.config.enhanced_builder import build_enhanced_config, generate_vless_url_enhanced, get_config_recommendation
+    from scripts.cache.redis_client import redis_client, init_redis
+    from scripts.monitoring.metrics import metrics, track_message_duration
+    from scripts.database.models import (
         PaymentCreate, PaymentMethod, PaymentStatus,
         SupportTicketCreate, TicketCategory, TicketPriority,
         SubscriptionPlan, SubscriptionPlanDetails
@@ -667,7 +667,7 @@ async def init_v4_modules():
         await metrics.start_server()
 
         # Запуск health check сервера
-        from monitoring.health import start_health_server
+        from scripts.monitoring.health import start_health_server
         await start_health_server()
 
         logger.info("v4.0 модули инициализированы")

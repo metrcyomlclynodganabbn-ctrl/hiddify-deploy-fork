@@ -11,8 +11,8 @@ from typing import Optional, Dict, List, Tuple
 from datetime import datetime, timedelta
 from decimal import Decimal
 
-from ..database.connection import get_db_connection
-from ..database.models import ValidationError
+from scripts.database.connection import get_db_connection
+from scripts.database.models import ValidationError
 
 logger = logging.getLogger(__name__)
 

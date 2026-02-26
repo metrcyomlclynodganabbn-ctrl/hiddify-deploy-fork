@@ -24,6 +24,7 @@ RUN mkdir -p data logs
 # Переменные окружения
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONPATH="/app:$PYTHONPATH"
 
-# Запуск бота
-CMD ["python", "scripts/monitor_bot.py"]
+# Запуск бота как модуль для правильного разрешения импортов
+CMD ["python", "-m", "scripts.monitor_bot"]

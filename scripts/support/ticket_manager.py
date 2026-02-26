@@ -10,8 +10,8 @@ import logging
 from typing import Optional, Dict, List
 from datetime import datetime
 
-from ..database.connection import get_db_connection
-from ..database.models import (
+from scripts.database.connection import get_db_connection
+from scripts.database.models import (
     SupportTicketCreate, SupportTicketResponse,
     TicketMessageCreate, TicketMessageResponse,
     TicketCategory, TicketStatus, TicketPriority
