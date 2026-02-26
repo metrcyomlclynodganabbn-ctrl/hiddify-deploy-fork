@@ -216,7 +216,12 @@ def init_db():
 
             vless_uuid VARCHAR(36),
             hysteria2_password VARCHAR(255),
-            ss2022_password VARCHAR(255)
+            ss2022_password VARCHAR(255),
+
+            is_trial BOOLEAN DEFAULT 0,
+            trial_expiry TIMESTAMP,
+            trial_activated BOOLEAN DEFAULT 0,
+            trial_data_limit_gb INTEGER DEFAULT 10
         )
     ''')
 
@@ -252,6 +257,32 @@ def init_db():
         )
     ''')
 
+    # Миграция: добавить недостающие колонки для trial функционала
+    try:
+        # Проверить наличие колонок
+        cursor.execute("PRAGMA table_info(users)")
+        columns = {row[1] for row in cursor.fetchall()}
+
+        # Добавить недостающие колонки
+        if 'is_trial' not in columns:
+            cursor.execute('ALTER TABLE users ADD COLUMN is_trial BOOLEAN DEFAULT 0')
+            logger.info("Добавлена колонка is_trial")
+
+        if 'trial_expiry' not in columns:
+            cursor.execute('ALTER TABLE users ADD COLUMN trial_expiry TIMESTAMP')
+            logger.info("Добавлена колонка trial_expiry")
+
+        if 'trial_activated' not in columns:
+            cursor.execute('ALTER TABLE users ADD COLUMN trial_activated BOOLEAN DEFAULT 0')
+            logger.info("Добавлена колонка trial_activated")
+
+        if 'trial_data_limit_gb' not in columns:
+            cursor.execute('ALTER TABLE users ADD COLUMN trial_data_limit_gb INTEGER DEFAULT 10')
+            logger.info("Добавлена колонка trial_data_limit_gb")
+
+    except sqlite3.OperationalError as e:
+        logger.warning(f"Миграция не удалась: {e}")
+
     conn.commit()
     conn.close()
 
@@ -278,7 +309,8 @@ def get_user(telegram_id):
             'expire_days', 'created_at', 'expires_at', 'used_bytes',
             'last_connection', 'is_active', 'is_blocked', 'vless_enabled',
             'hysteria2_enabled', 'ss2022_enabled', 'vless_uuid',
-            'hysteria2_password', 'ss2022_password'
+            'hysteria2_password', 'ss2022_password',
+            'is_trial', 'trial_expiry', 'trial_activated', 'trial_data_limit_gb'
         ]
 
         return dict(zip(columns, user))
