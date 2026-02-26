@@ -1,7 +1,16 @@
 #!/usr/bin/env python3
 """
-Hiddify Manager Telegram Bot v3.0.0
+Hiddify Manager Telegram Bot v4.0.0
 Полнофункциональный бот с UI/UX для приватных пользователей и админки
+
+Новое в v4.0.0:
+- PostgreSQL вместо SQLite
+- Redis кэширование
+- Stripe платежи
+- Support tickets
+- Referral программа
+- Config Builder (Standard/Enhanced)
+- Prometheus + Grafana мониторинг
 
 Новое в v3.0.0:
 - Интеграция с Hiddify Manager API
@@ -44,6 +53,13 @@ try:
         is_manager, can_invite_users, set_user_role,
         get_role_display_name
     )
+    # v4.0: Новые модули (дополнительно)
+    try:
+        from v4_handlers import register_all_v4_handlers, init_v4_modules
+        V4_AVAILABLE = True
+    except ImportError:
+        V4_AVAILABLE = False
+        logger.info("v4.0 модули не доступны")
 except ImportError:
     print("⚠️  Модули v2.1 не найдены, использую базовую функциональность")
     generate_vless_url = None
@@ -62,6 +78,7 @@ except ImportError:
     can_invite_users = None
     set_user_role = None
     get_role_display_name = None
+    V4_AVAILABLE = False
 # Загрузка переменных окружения
 load_dotenv()
 
@@ -518,6 +535,12 @@ def user_main_keyboard(telegram_id=None):
         btn5 = types.KeyboardButton("👥 Пригласить друга")
         markup.add(btn5)
 
+    # v4.0: Новые кнопки
+    if V4_AVAILABLE:
+        btn5_v4 = types.KeyboardButton("💳 Купить подписку")
+        btn6_v4 = types.KeyboardButton("👥 Рефералы")
+        markup.add(btn5_v4, btn6_v4)
+
     return markup
 
 
@@ -637,8 +660,20 @@ def handle_start(message):
 
     # Проверка на инвайт-код
     invite_code = None
+    ref_referrer_id = None  # v4.0: Реферальный код
+
     if len(args) > 1:
-        invite_code = args[1]
+        start_param = args[1]
+        if start_param.startswith('INV_'):
+            # Инвайт-код (v3.x)
+            invite_code = start_param
+        elif V4_AVAILABLE and start_param.startswith('ref_'):
+            # Реферальный код (v4.0)
+            try:
+                ref_referrer_id = int(start_param.split('_')[1])
+                logger.info(f"Пользователь {telegram_id} пришёл по реферальной ссылке от {ref_referrer_id}")
+            except (ValueError, IndexError):
+                pass
 
     # Проверка существования пользователя
     user = get_user(telegram_id)
@@ -710,6 +745,19 @@ def handle_start(message):
                     # Увеличить счётчик использований инвайта
                     if use_invite_code:
                         use_invite_code(DB_PATH, invite_code)
+
+                    # v4.0: Создать реферальную запись если пришёл по реф ссылке
+                    if V4_AVAILABLE and ref_referrer_id:
+                        try:
+                            from referral.referral_manager import referral_manager
+                            import asyncio
+                            asyncio.run(referral_manager.create_referral(
+                                referrer_id=ref_referrer_id,
+                                referred_id=telegram_id
+                            ))
+                            logger.info(f"Реферальная запись создана: {ref_referrer_id} -> {telegram_id}")
+                        except Exception as e:
+                            logger.warning(f"Не удалось создать реферальную запись: {e}")
 
                     bot.send_message(
                         telegram_id,
@@ -1856,6 +1904,85 @@ def handle_user_delete(call):
 def handle_user_limit(call):
     """Изменить лимит трафика"""
 
+
+# ============================================================================
+# v4.0: MESSAGE HANDLERS FOR NEW FEATURES
+# ============================================================================
+
+@bot.message_handler(func=lambda message: message.text == "💳 Купить подписку" if V4_AVAILABLE else False)
+def handle_buy_subscription_button(message):
+    """Обработка кнопки 'Купить подписку'"""
+    if not V4_AVAILABLE:
+        return
+
+    # Имитируем callback query для использования тех же handlers
+    class FakeCallback:
+        def __init__(self, chat, from_user):
+            self.message = chat
+            self.id = None
+            self.from_user = from_user
+            self.data = "buy_subscription"
+
+    fake_call = FakeCallback(message.chat, message.from_user)
+    from v4_handlers import handle_buy_subscription
+    handle_buy_subscription(fake_call)
+
+
+@bot.message_handler(commands=['support'])
+def handle_support_command(message):
+    """Команда /support - создать тикет"""
+    if not V4_AVAILABLE:
+        bot.send_message(message.chat.id, "❌ Поддержка временно недоступна")
+        return
+
+    # Используем обработчик из v4_handlers
+    from v4_handlers import handle_support_command
+    handle_support_command(message)
+
+
+@bot.message_handler(func=lambda message: message.text == "💬 Поддержка" if V4_AVAILABLE else False)
+def handle_support_button(message):
+    """Обработка кнопки 'Поддержка'"""
+    if not V4_AVAILABLE:
+        return
+
+    # Вызываем команду /support
+    handle_support_command(message)
+
+
+@bot.message_handler(func=lambda message: message.text == "👥 Рефералы" if V4_AVAILABLE else False)
+def handle_referrals_button(message):
+    """Обработка кнопки 'Рефералы'"""
+    if not V4_AVAILABLE:
+        return
+
+    # Имитируем callback query
+    class FakeCallback:
+        def __init__(self, chat, from_user):
+            self.message = chat
+            self.id = None
+            self.from_user = from_user
+            self.data = "my_referrals"
+
+    fake_call = FakeCallback(message.chat, message.from_user)
+    from v4_handlers import handle_my_referrals
+    handle_my_referrals(fake_call)
+
+
+@bot.message_handler(commands=['referrals', 'ref'])
+def handle_referrals_command(message):
+    """Команда /referrals - статистика рефералов"""
+    if not V4_AVAILABLE:
+        bot.send_message(message.chat.id, "❌ Рефералы временно недоступны")
+        return
+
+    handle_referrals_button(message)
+
+
+# ============================================================================
+# КОНЕЦ v4.0 MESSAGE HANDLERS
+# ============================================================================
+
     telegram_id = call.message.chat.id
 
     if not is_admin(telegram_id):
@@ -1900,6 +2027,20 @@ def main():
 
     # Инициализация БД
     init_db()
+
+    # v4.0: Инициализация новых модулей
+    if V4_AVAILABLE:
+        logger.info("Инициализация v4.0 модулей...")
+        import asyncio
+        try:
+            asyncio.run(init_v4_modules())
+            # Регистрация v4.0 handlers
+            register_all_v4_handlers(bot)
+            logger.info("✅ v4.0 модули загружены")
+        except Exception as e:
+            logger.warning(f"⚠️  Ошибка инициализации v4.0 модулей: {e}")
+    else:
+        logger.info("v4.0 модули недоступны, работаем в режиме совместимости")
 
     try:
         bot.infinity_polling(timeout=10, long_polling_timeout=5)
