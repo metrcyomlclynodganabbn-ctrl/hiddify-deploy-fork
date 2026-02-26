@@ -288,6 +288,11 @@ class HiddifyAPI:
 def validate_invite_code(db_path: str, invite_code: str) -> Optional[Dict]:
     """Проверить валидность инвайт-кода в БД
 
+    Унифицированные проверки соответствуют условиям в use_invite_code():
+    - Код активен (is_active = 1)
+    - Срок действия не истёк (expires_at > NOW или NULL)
+    - Лимит использований не достигнут (used_count < max_uses)
+
     Args:
         db_path: Путь к базе данных
         invite_code: Код инвайта
@@ -298,11 +303,14 @@ def validate_invite_code(db_path: str, invite_code: str) -> Optional[Dict]:
     import sqlite3
 
     conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
     try:
         cursor.execute('''
-            SELECT * FROM invites
+            SELECT id, code, created_by, created_at, expires_at,
+                   max_uses, used_count, is_active
+            FROM invites
             WHERE code = ? AND is_active = 1
             AND (expires_at IS NULL OR expires_at > datetime('now'))
             AND used_count < max_uses
@@ -310,25 +318,27 @@ def validate_invite_code(db_path: str, invite_code: str) -> Optional[Dict]:
 
         row = cursor.fetchone()
         if row:
-            columns = [
-                'id', 'code', 'created_by', 'created_at', 'expires_at',
-                'max_uses', 'used_count', 'is_active'
-            ]
-            return dict(zip(columns, row))
+            return dict(row)
         return None
     finally:
         conn.close()
 
 
-def use_invite_code(db_path: str, invite_code: str) -> bool:
-    """Увеличить счётчик использований инвайта
+def use_invite_code(db_path: str, invite_code: str) -> dict:
+    """Атомарное использование инвайт-кода с проверкой лимита
+
+    Использует атомарный UPDATE с проверкой всех условий в одном запросе,
+    что предотвращает race condition при параллельных запросах.
 
     Args:
         db_path: Путь к базе данных
         invite_code: Код инвайта
 
     Returns:
-        True если успешно, иначе False
+        dict с результатом операции:
+            - success: bool - успешно ли использован
+            - message: str - сообщение о результате
+            - invite_data: dict|None - данные инвайта (если успешно)
     """
     import sqlite3
 
@@ -336,37 +346,147 @@ def use_invite_code(db_path: str, invite_code: str) -> bool:
     cursor = conn.cursor()
 
     try:
+        # Атомарная проверка и обновление в одном запросе
         cursor.execute('''
             UPDATE invites
-            SET used_count = used_count + 1
+            SET used_count = used_count + 1,
+                is_active = CASE
+                    WHEN used_count + 1 >= max_uses THEN 0
+                    ELSE is_active
+                END
             WHERE code = ?
+                AND is_active = 1
+                AND (expires_at IS NULL OR expires_at > datetime('now'))
+                AND used_count < max_uses
         ''', (invite_code,))
 
+        if cursor.rowcount == 0:
+            return {
+                'success': False,
+                'message': 'Инвайт-код недействителен, истёк или исчерпан',
+                'invite_data': None
+            }
+
+        # Получить обновлённые данные
+        cursor.execute('''
+            SELECT id, code, created_by, created_at, expires_at,
+                   max_uses, used_count, is_active
+            FROM invites WHERE code = ?
+        ''', (invite_code,))
+
+        result = cursor.fetchone()
+        columns = ['id', 'code', 'created_by', 'created_at', 'expires_at',
+                   'max_uses', 'used_count', 'is_active']
+
         conn.commit()
-        return True
+
+        return {
+            'success': True,
+            'message': 'Инвайт-код использован',
+            'invite_data': dict(zip(columns, result))
+        }
+
     except Exception as e:
+        conn.rollback()
         logger.error(f"Ошибка использования инвайта: {e}")
-        return False
+        return {
+            'success': False,
+            'message': f'Ошибка: {e}',
+            'invite_data': None
+        }
     finally:
         conn.close()
 
 
 def create_invite_code(db_path: str, code: str, created_by: int,
-                      max_uses: int = 1, expires_at: str = None) -> bool:
-    """Создать новый инвайт-код
+                      max_uses: int = 1, expires_at: str = None) -> dict:
+    """Создать инвайт-код с валидацией параметров
+
+    Валидация включает:
+    - Проверка формата кода (должен начинаться с INV_)
+    - Проверка длины кода (8-50 символов)
+    - Проверка диапазона max_uses (1-1000)
+    - Проверка существования создателя
+    - Проверка срока действия (не в прошлом)
 
     Args:
         db_path: Путь к базе данных
-        code: Код инвайта
+        code: Код инвайта (формат INV_xxxxx)
         created_by: Telegram ID создателя
-        max_uses: Максимальное количество использований
-        expires_at: Дата истечения (ISO формат)
+        max_uses: Максимальное количество использований (1-1000)
+        expires_at: Дата истечения (ISO формат, опционально)
 
     Returns:
-        True если успешно, иначе False
+        dict с результатом операции:
+            - success: bool - успешно ли создан
+            - message: str - сообщение о результате
+            - invite_data: dict|None - данные инвайта (если успешно)
     """
     import sqlite3
+    from datetime import datetime
 
+    # Валидация параметров
+    try:
+        if max_uses < 1 or max_uses > 1000:
+            return {
+                'success': False,
+                'message': 'max_uses должен быть от 1 до 1000',
+                'invite_data': None
+            }
+
+        if not code.startswith('INV_'):
+            return {
+                'success': False,
+                'message': 'Код должен начинаться с INV_',
+                'invite_data': None
+            }
+
+        if len(code) < 8 or len(code) > 50:
+            return {
+                'success': False,
+                'message': 'Длина кода должна быть от 8 до 50 символов',
+                'invite_data': None
+            }
+
+        # Проверить created_by существует (по telegram_id)
+        conn_check = sqlite3.connect(db_path)
+        cursor_check = conn_check.cursor()
+        cursor_check.execute('SELECT id FROM users WHERE telegram_id = ?', (created_by,))
+        if not cursor_check.fetchone():
+            conn_check.close()
+            return {
+                'success': False,
+                'message': f'Пользователь-создатель (telegram_id={created_by}) не существует',
+                'invite_data': None
+            }
+        conn_check.close()
+
+        # Проверить expires_at
+        expiry_dt = None
+        if expires_at:
+            try:
+                expiry_dt = datetime.fromisoformat(expires_at)
+                if expiry_dt < datetime.now():
+                    return {
+                        'success': False,
+                        'message': 'Срок действия не может быть в прошлом',
+                        'invite_data': None
+                    }
+            except ValueError:
+                return {
+                    'success': False,
+                    'message': 'Некорректный формат даты (используйте ISO формат)',
+                    'invite_data': None
+                }
+
+    except Exception as e:
+        return {
+            'success': False,
+            'message': f'Ошибка валидации: {e}',
+            'invite_data': None
+        }
+
+    # Создать инвайт
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
@@ -377,12 +497,35 @@ def create_invite_code(db_path: str, code: str, created_by: int,
         ''', (code, created_by, max_uses, expires_at))
 
         conn.commit()
-        return True
+
+        # Получить созданный инвайт
+        cursor.execute('''
+            SELECT id, code, created_by, created_at, expires_at,
+                   max_uses, used_count, is_active
+            FROM invites WHERE code = ?
+        ''', (code,))
+
+        result = cursor.fetchone()
+        columns = ['id', 'code', 'created_by', 'created_at', 'expires_at',
+                   'max_uses', 'used_count', 'is_active']
+
+        return {
+            'success': True,
+            'message': 'Инвайт-код создан',
+            'invite_data': dict(zip(columns, result))
+        }
+
     except sqlite3.IntegrityError:
-        logger.error(f"Инвайт-код {code} уже существует")
-        return False
+        return {
+            'success': False,
+            'message': f'Инвайт-код {code} уже существует',
+            'invite_data': None
+        }
     except Exception as e:
-        logger.error(f"Ошибка создания инвайта: {e}")
-        return False
+        return {
+            'success': False,
+            'message': f'Ошибка создания инвайта: {e}',
+            'invite_data': None
+        }
     finally:
         conn.close()

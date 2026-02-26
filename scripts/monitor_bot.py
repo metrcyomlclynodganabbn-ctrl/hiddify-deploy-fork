@@ -211,9 +211,15 @@ def cancel_operation(telegram_id: int) -> bool:
 # ============================================================================
 
 def init_db():
-    """Инициализация базы данных"""
+    """Инициализация базы данных с WAL mode для конкурентного доступа"""
 
     conn = sqlite3.connect(DB_PATH)
+
+    # Включить WAL mode для параллельного чтения/записи
+    conn.execute('PRAGMA journal_mode=WAL')
+    conn.execute('PRAGMA busy_timeout=30000')
+    conn.execute('PRAGMA foreign_keys=ON')
+
     cursor = conn.cursor()
 
     # Таблица пользователей

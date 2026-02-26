@@ -6,9 +6,12 @@
 2. Использование инвайта
 3. Проверку лимитов использования
 4. Истечение срока действия инвайта
+5. Race conditions при параллельном использовании
+6. WAL mode и атомарность операций
 """
 
 import pytest
+import threading
 from datetime import datetime, timedelta
 
 
@@ -167,3 +170,147 @@ def test_invite_with_future_expiration(init_test_db):
         expires_at = datetime.fromisoformat(invite['expires_at'])
         assert expires_at > datetime.now()
         assert invite['is_active'] == 1
+
+
+# ============================================================================
+# НОВЫЕ ТЕСТЫ ДЛЯ RACE CONDITIONS И АТОМАРНОСТИ
+# ============================================================================
+
+@pytest.mark.integration
+def test_wal_mode_enabled(init_test_db):
+    """Проверить что WAL mode включён"""
+    result = init_test_db.execute('PRAGMA journal_mode').fetchone()
+    assert result[0] == 'wal', f"WAL mode не включён: {result[0]}"
+
+
+@pytest.mark.integration
+def test_race_condition_prevention(test_db_with_path):
+    """Тест race condition - только max_uses использований должно пройти"""
+    from scripts.hiddify_api import use_invite_code
+
+    db = test_db_with_path['conn']
+    db_path = test_db_with_path['path']
+
+    # Создать инвайт с лимитом 2
+    db.execute('''
+        INSERT INTO invites (code, max_uses, used_count, is_active)
+        VALUES ('INV_RACE', 2, 0, 1)
+    ''')
+    db.commit()
+
+    results = []
+    lock = threading.Lock()
+
+    def use_invite(thread_id):
+        result = use_invite_code(db_path, 'INV_RACE')
+        with lock:
+            results.append((thread_id, result['success']))
+
+    # 5 потоков одновременно
+    threads = []
+    for i in range(5):
+        t = threading.Thread(target=use_invite, args=(i,))
+        threads.append(t)
+        t.start()
+
+    for t in threads:
+        t.join()
+
+    # Только 2 должны быть успешными
+    successful = sum(1 for _, success in results if success)
+    assert successful == 2, f"Ожидалось 2 успешных, получено {successful}"
+
+
+@pytest.mark.integration
+def test_invite_atomic_use(test_db_with_path):
+    """Тест атомарности - второе использование должно fail"""
+    from scripts.hiddify_api import use_invite_code
+
+    db = test_db_with_path['conn']
+    db_path = test_db_with_path['path']
+
+    db.execute('''
+        INSERT INTO invites (code, max_uses, used_count, is_active)
+        VALUES ('INV_ATOMIC', 1, 0, 1)
+    ''')
+    db.commit()
+
+    # Первое - успешно
+    result1 = use_invite_code(db_path, 'INV_ATOMIC')
+    assert result1['success'] is True
+    assert result1['invite_data']['used_count'] == 1
+
+    # Второе - fail
+    result2 = use_invite_code(db_path, 'INV_ATOMIC')
+    assert result2['success'] is False
+    assert 'исчерпан' in result2['message'] or 'недействителен' in result2['message']
+
+
+@pytest.mark.integration
+def test_create_invite_validation(test_db_with_path):
+    """Тест валидации при создании инвайта"""
+    from scripts.hiddify_api import create_invite_code
+
+    db = test_db_with_path['conn']
+    db_path = test_db_with_path['path']
+
+    # Сначала создать пользователя
+    db.execute('''
+        INSERT INTO users (telegram_id, telegram_username, telegram_first_name)
+        VALUES (999999, "@testuser", "Test")
+    ''')
+    db.commit()
+
+    # Тест 1: Неверный формат кода
+    result = create_invite_code(db_path, "WRONG_FORMAT", 999999)
+    assert result['success'] is False
+    assert 'INV_' in result['message']
+
+    # Тест 2: Несуществующий создатель
+    result = create_invite_code(db_path, "INV_a1b2c3d4", 888888)
+    assert result['success'] is False
+    assert 'не существует' in result['message']
+
+    # Тест 3: max_uses вне диапазона
+    result = create_invite_code(db_path, "INV_b1c2d3e4", 999999, max_uses=0)
+    assert result['success'] is False
+    assert 'max_uses' in result['message']
+
+    # Тест 4: max_uses слишком большой
+    result = create_invite_code(db_path, "INV_c2d3e4f5", 999999, max_uses=1001)
+    assert result['success'] is False
+    assert 'max_uses' in result['message']
+
+    # Тест 5: Корректный инвайт (hex-символы после INV_)
+    result = create_invite_code(db_path, "INV_abc12345", 999999, max_uses=5)
+    assert result['success'] is True
+    assert result['invite_data']['max_uses'] == 5
+
+
+@pytest.mark.integration
+def test_validate_invite_code_unified(test_db_with_path):
+    """Тест унифицированной проверки инвайта"""
+    from scripts.hiddify_api import validate_invite_code
+
+    db = test_db_with_path['conn']
+    db_path = test_db_with_path['path']
+
+    # Создать активный инвайт
+    db.execute('''
+        INSERT INTO invites (code, max_uses, used_count, is_active)
+        VALUES ('INV_VALID_TEST', 5, 0, 1)
+    ''')
+    db.commit()
+
+    # Должен быть валиден
+    result = validate_invite_code(db_path, 'INV_VALID_TEST')
+    assert result is not None
+    assert result['code'] == 'INV_VALID_TEST'
+    assert result['is_active'] == 1
+
+    # После достижения лимита - не валиден
+    db.execute('UPDATE invites SET used_count = 5 WHERE code = ?', ('INV_VALID_TEST',))
+    db.commit()
+
+    result = validate_invite_code(db_path, 'INV_VALID_TEST')
+    assert result is None

@@ -10,6 +10,9 @@ python-telegram-bot>=20.0
 sqlalchemy>=2.0.0
 alembic>=1.12.0
 
+# === Data Validation (v3.1.1+) ===
+pydantic>=2.0.0
+
 # === Current: SQLite ===
 # Встроен в Python 3.7+, не требует установки
 

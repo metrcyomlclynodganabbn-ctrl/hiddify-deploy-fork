@@ -66,8 +66,13 @@ def test_env_vars(temp_db_path, monkeypatch):
 
 
 @pytest.fixture(scope="function")
-def init_test_db(db_connection):
-    """Инициализировать тестовую БД схемой"""
+def init_test_db(db_connection, temp_db_path):
+    """Инициализировать тестовую БД схемой с WAL mode"""
+
+    # Включить WAL mode для конкурентного доступа
+    db_connection.execute('PRAGMA journal_mode=WAL')
+    db_connection.execute('PRAGMA busy_timeout=30000')
+    db_connection.execute('PRAGMA foreign_keys=ON')
 
     # Таблица пользователей
     db_connection.execute('''
@@ -92,7 +97,8 @@ def init_test_db(db_connection):
             ss2022_enabled BOOLEAN DEFAULT 1,
             vless_uuid VARCHAR(36),
             hysteria2_password VARCHAR(255),
-            ss2022_password VARCHAR(255)
+            ss2022_password VARCHAR(255),
+            role VARCHAR(20) DEFAULT 'user'
         )
     ''')
 
@@ -114,6 +120,15 @@ def init_test_db(db_connection):
     db_connection.commit()
 
     return db_connection
+
+
+@pytest.fixture(scope="function")
+def test_db_with_path(temp_db_path, init_test_db):
+    """Фикстура для тестов hiddify_api - возвращает и путь, и connection"""
+    return {
+        'path': temp_db_path,
+        'conn': init_test_db
+    }
 
 
 @pytest.fixture(scope="function")
