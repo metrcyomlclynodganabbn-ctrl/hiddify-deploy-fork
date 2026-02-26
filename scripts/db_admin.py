@@ -7,7 +7,7 @@
 import os
 import sys
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 
 DB_PATH = os.path.join(os.path.dirname(__file__), '../data/bot.db')
 
@@ -223,6 +223,104 @@ def unblock_user(user_id):
     conn.close()
 
 
+def list_invites():
+    """Список всех инвайт-кодов"""
+
+    conn = connect_db()
+    cursor = conn.cursor()
+
+    cursor.execute('''
+        SELECT id, code, created_by, max_uses, used_count,
+               is_active, expires_at, created_at
+        FROM invites
+        ORDER BY created_at DESC
+    ''')
+
+    invites = cursor.fetchall()
+
+    if not invites:
+        print("📭 Инвайт-кодов нет")
+        return
+
+    print(f"\n🎫 Инвайт-кодов: {len(invites)}\n")
+
+    for invite in invites:
+        (invite_id, code, created_by, max_uses, used_count,
+         is_active, expires_at, created_at) = invite
+
+        status = "✅" if is_active else "❌"
+        expires_str = ""
+        if expires_at:
+            expire_date = datetime.fromisoformat(expires_at)
+            if expire_date > datetime.now():
+                days_left = (expire_date - datetime.now()).days
+                expires_str = f" (истекает через {days_left} дн)"
+            else:
+                expires_str = " (истёк)"
+
+        print(f"{status} {code}")
+        print(f"   ID: {invite_id} | Создан ID: {created_by}")
+        print(f"   Использований: {used_count}/{max_uses}{expires_str}")
+        print()
+
+    conn.close()
+
+
+def cmd_create_invite(args):
+    """
+    Создать инвайт-код
+
+    Использование: create_invite [count] [days]
+
+    Примеры:
+        create_invite           # 1 инвайт, бессрочный
+        create_invite 10        # 10 инвайтов, бессрочных
+        create_invite 5 7       # 5 инвайтов, на 7 дней
+    """
+
+    count = int(args[0]) if len(args) > 0 else 1
+    days = int(args[1]) if len(args) > 1 else None
+
+    # Получить ID первого пользователя (админа) для created_by
+    conn = connect_db()
+    cursor = conn.cursor()
+
+    cursor.execute('SELECT id FROM users ORDER BY id ASC LIMIT 1')
+    result = cursor.fetchone()
+
+    if not result:
+        print("❌ В БД нет пользователей. Сначала создайте администратора через бота.")
+        conn.close()
+        return
+
+    admin_id = result[0]
+
+    invites = []
+    for _ in range(count):
+        code = f"INV_{os.urandom(8).hex()}"
+        expires_at = None
+        if days:
+            expires_at = (datetime.now() + timedelta(days=days)).isoformat()
+
+        cursor.execute('''
+            INSERT INTO invites (code, created_by, max_uses, expires_at)
+            VALUES (?, ?, ?, ?)
+        ''', (code, admin_id, 1, expires_at))
+
+        invites.append(code)
+
+    conn.commit()
+    conn.close()
+
+    print(f"✅ Создано {count} инвайт-кодов:")
+    for code in invites:
+        expiry = f" (истекает через {days} дней)" if days else " (бессрочный)"
+        print(f"  • {code}{expiry}")
+
+    print("\nДля использования:")
+    print("  https://t.me/ваш_бот?start=INV_код")
+
+
 def main():
     """Главная функция"""
 
@@ -234,6 +332,9 @@ def main():
         print("  python3 db_admin.py extend <id> <days>   - Продлить подписку")
         print("  python3 db_admin.py block <id>    - Заблокировать")
         print("  python3 db_admin.py unblock <id>  - Разблокировать")
+        print("\n  Инвайты:")
+        print("  python3 db_admin.py invites       - Список инвайт-кодов")
+        print("  python3 db_admin.py create_invite [count] [days]  - Создать инвайты")
         sys.exit(1)
 
     command = sys.argv[1]
@@ -262,6 +363,10 @@ def main():
             print("❌ Укажите ID пользователя")
             sys.exit(1)
         unblock_user(int(sys.argv[2]))
+    elif command == "invites":
+        list_invites()
+    elif command == "create_invite":
+        cmd_create_invite(sys.argv[2:])
     else:
         print(f"❌ Неизвестная команда: {command}")
         sys.exit(1)
