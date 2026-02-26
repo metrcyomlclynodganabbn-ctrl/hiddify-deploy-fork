@@ -1,0 +1,29 @@
+[Unit]
+Description=Hiddify Manager Telegram Bot v3.0
+Documentation=https://github.com/hiddify/Hiddify-Manager
+After=network.target hiddify-manager.service
+Wants=hiddify-manager.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/hiddify-manager
+Environment="PYTHONUNBUFFERED=1"
+Environment="PATH=/usr/local/bin:/usr/bin:/bin"
+ExecStartPre=/bin/bash -c 'test -f /opt/hiddify-manager/.env || exit 1'
+ExecStart=/usr/bin/python3 /opt/hiddify-manager/scripts/monitor_bot.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=hiddify-bot
+
+# Безопасность
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/hiddify-manager/data /opt/hiddify-manager/logs
+
+[Install]
+WantedBy=multi-user.target

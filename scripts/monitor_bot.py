@@ -1,7 +1,14 @@
 #!/usr/bin/env python3
 """
-Hiddify Manager Telegram Bot v2.1
+Hiddify Manager Telegram Bot v3.0.0
 Полнофункциональный бот с UI/UX для приватных пользователей и админки
+
+Новое в v3.0.0:
+- Интеграция с Hiddify Manager API
+- Реальная админка (пользователи, статистика, создание юзеров)
+- Система инвайтов с валидацией
+- Отображение активных устройств
+- Graceful degradation при недоступности API
 
 Новое в v2.1:
 - QR код генерация
@@ -27,13 +34,34 @@ try:
     from vless_utils import generate_vless_url, validate_vless_url
     from platform_instructions import get_instruction, get_platform_list
     from qr_generator import generate_qr_code
+    from hiddify_api import (
+        HiddifyAPI, HiddifyAPIError,
+        validate_invite_code, use_invite_code, create_invite_code
+    )
+    # v3.1: Система ролей
+    from roles import (
+        Role, get_user_role, is_admin as check_is_admin,
+        is_manager, can_invite_users, set_user_role,
+        get_role_display_name
+    )
 except ImportError:
     print("⚠️  Модули v2.1 не найдены, использую базовую функциональность")
     generate_vless_url = None
     get_instruction = None
     get_platform_list = None
     generate_qr_code = None
-
+    HiddifyAPI = None
+    validate_invite_code = None
+    use_invite_code = None
+    create_invite_code = None
+    # Fallback для ролей
+    Role = None
+    get_user_role = None
+    check_is_admin = None
+    is_manager = None
+    can_invite_users = None
+    set_user_role = None
+    get_role_display_name = None
 # Загрузка переменных окружения
 load_dotenv()
 
@@ -221,7 +249,9 @@ def init_db():
             is_trial BOOLEAN DEFAULT 0,
             trial_expiry TIMESTAMP,
             trial_activated BOOLEAN DEFAULT 0,
-            trial_data_limit_gb INTEGER DEFAULT 10
+            trial_data_limit_gb INTEGER DEFAULT 10,
+
+            role VARCHAR(20) DEFAULT 'user'
         )
     ''')
 
@@ -361,17 +391,104 @@ def create_user(telegram_id, username=None, first_name=None,
 
 
 def is_admin(telegram_id):
-    """Проверка прав админа"""
+    """
+    Проверка прав админа
 
-    return telegram_id == ADMIN_ID
+    v3.1: Использует систему ролей если доступна, иначе fallback на ADMIN_ID
+    """
+    if check_is_admin is not None:
+        # Используем новую систему ролей
+        return check_is_admin(telegram_id)
+    else:
+        # Fallback для обратной совместимости
+        return telegram_id == ADMIN_ID
+
+
+def get_users_list(limit: int = 50, offset: int = 0) -> list[dict]:
+    """Получить список пользователей из БД
+
+    Args:
+        limit: Максимальное количество пользователей
+        offset: Смещение для пагинации
+
+    Returns:
+        List[dict] с данными пользователей
+    """
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    cursor.execute('''
+        SELECT * FROM users
+        ORDER BY created_at DESC
+        LIMIT ? OFFSET ?
+    ''', (limit, offset))
+
+    rows = cursor.fetchall()
+    conn.close()
+
+    if not rows:
+        return []
+
+    columns = [
+        'id', 'telegram_id', 'telegram_username', 'telegram_first_name',
+        'user_type', 'invite_code', 'invited_by', 'data_limit_bytes',
+        'expire_days', 'created_at', 'expires_at', 'used_bytes',
+        'last_connection', 'is_active', 'is_blocked', 'vless_enabled',
+        'hysteria2_enabled', 'ss2022_enabled', 'vless_uuid',
+        'hysteria2_password', 'ss2022_password',
+        'is_trial', 'trial_expiry', 'trial_activated', 'trial_data_limit_gb'
+    ]
+
+    return [dict(zip(columns, row)) for row in rows]
+
+
+def get_users_stats() -> dict:
+    """Получить статистику по пользователям
+
+    Returns:
+        Dict с данными:
+            - total_users: Всего пользователей
+            - active_users: Активных пользователей
+            - trial_users: Пользователей с trial
+            - blocked_users: Заблокированных пользователей
+    """
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    cursor.execute('SELECT COUNT(*) FROM users')
+    total_users = cursor.fetchone()[0]
+
+    cursor.execute('SELECT COUNT(*) FROM users WHERE is_active = 1')
+    active_users = cursor.fetchone()[0]
+
+    cursor.execute('SELECT COUNT(*) FROM users WHERE is_trial = 1')
+    trial_users = cursor.fetchone()[0]
+
+    cursor.execute('SELECT COUNT(*) FROM users WHERE is_blocked = 1')
+    blocked_users = cursor.fetchone()[0]
+
+    conn.close()
+
+    return {
+        'total_users': total_users,
+        'active_users': active_users,
+        'trial_users': trial_users,
+        'blocked_users': blocked_users
+    }
 
 
 # ============================================================================
 # UI КОМПОНЕНТЫ (INLINE КЛАВИАТУРЫ)
 # ============================================================================
 
-def user_main_keyboard():
-    """Главная клавиатура пользователя"""
+def user_main_keyboard(telegram_id=None):
+    """
+    Главная клавиатура пользователя (с ограничением по ролям)
+
+    Args:
+        telegram_id: Telegram ID пользователя для проверки прав.
+                     Если None, кнопка "Пригласить друга" не показывается.
+    """
 
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
 
@@ -379,9 +496,21 @@ def user_main_keyboard():
     btn2 = types.KeyboardButton("🔗 Получить ключ")
     btn3 = types.KeyboardButton("📊 Моя подписка")
     btn4 = types.KeyboardButton("💬 Поддержка")
-    btn5 = types.KeyboardButton("👥 Пригласить друга")
 
-    markup.add(btn1, btn2, btn3, btn4, btn5)
+    # Добавляем кнопку "Пригласить друга" только для manager/admin
+    show_invite = False
+    if telegram_id and can_invite_users:
+        try:
+            show_invite = can_invite_users(telegram_id)
+        except Exception:
+            # Graceful degradation - не показываем кнопку при ошибке
+            show_invite = False
+
+    markup.add(btn1, btn2, btn3, btn4)
+
+    if show_invite:
+        btn5 = types.KeyboardButton("👥 Пригласить друга")
+        markup.add(btn5)
 
     return markup
 
@@ -490,7 +619,7 @@ def _get_keyboard_for_user(telegram_id: int):
     """Получить соответствующую клавиатуру для пользователя"""
     if is_admin(telegram_id):
         return admin_main_keyboard()
-    return user_main_keyboard()
+    return user_main_keyboard(telegram_id)
 
 
 @bot.message_handler(commands=['start'])
@@ -508,30 +637,94 @@ def handle_start(message):
     # Проверка существования пользователя
     user = get_user(telegram_id)
 
+    # Если пользователь не найден, проверяем - не был ли он создан админом (telegram_id = 0)?
     if not user:
-        # Новый пользователь
-        if invite_code and invite_code.startswith('INV_'):
-            # Регистрация по инвайт-коду
-            # TODO: Проверить валидность инвайт-кода
-            user_id = create_user(
-                telegram_id,
-                username=message.from_user.username,
-                first_name=message.from_user.first_name
-            )
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM users WHERE telegram_id = 0 ORDER BY created_at DESC LIMIT 1')
+        pending_user = cursor.fetchone()
+        conn.close()
 
-            if user_id:
-                bot.send_message(
+        if pending_user:
+            # Пользователь был создан админом - активируем его
+            columns = [
+                'id', 'telegram_id', 'telegram_username', 'telegram_first_name',
+                'user_type', 'invite_code', 'invited_by', 'data_limit_bytes',
+                'expire_days', 'created_at', 'expires_at', 'used_bytes',
+                'last_connection', 'is_active', 'is_blocked', 'vless_enabled',
+                'hysteria2_enabled', 'ss2022_enabled', 'vless_uuid',
+                'hysteria2_password', 'ss2022_password',
+                'is_trial', 'trial_expiry', 'trial_activated', 'trial_data_limit_gb'
+            ]
+            user = dict(zip(columns, pending_user))
+
+            # Обновляем telegram_id на реальный
+            conn = sqlite3.connect(DB_PATH)
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE users
+                SET telegram_id = ?, telegram_username = ?, telegram_first_name = ?
+                WHERE id = ?
+            ''', (telegram_id, message.from_user.username, message.from_user.first_name, user['id']))
+            conn.commit()
+            conn.close()
+
+            logger.info(f"Пользователь {user['telegram_username']} активирован: telegram_id={telegram_id}")
+
+            # Отправляем приветствие
+            bot.send_message(
+                telegram_id,
+                f"✅ *Добро пожаловать, {user['telegram_first_name']}!*\n\n"
+                f"Ваш доступ уже был активирован. "
+                f"Нажмите 'Получить ключ' для подключения.",
+                parse_mode='Markdown',
+                reply_markup=user_main_keyboard(telegram_id)
+            )
+            return
+
+    # Совсем новый пользователь (нет в БД и нет pending записей)
+    if not user:
+        # Новый пользователь - нужна инвайт-ссылка
+        if invite_code and invite_code.startswith('INV_'):
+            # Проверка валидности инвайт-кода
+            invite_valid = False
+            if validate_invite_code:
+                invite_data = validate_invite_code(DB_PATH, invite_code)
+                invite_valid = invite_data is not None
+
+            if invite_valid:
+                # Регистрация по инвайт-коду
+                user_id = create_user(
                     telegram_id,
-                    "✅ *Добро пожаловать!*\n\n"
-                    "Ваш доступ активирован. "
-                    "Теперь вы можете пользоваться VPN.",
-                    parse_mode='Markdown',
-                    reply_markup=user_main_keyboard()
+                    username=message.from_user.username,
+                    first_name=message.from_user.first_name
                 )
+
+                if user_id:
+                    # Увеличить счётчик использований инвайта
+                    if use_invite_code:
+                        use_invite_code(DB_PATH, invite_code)
+
+                    bot.send_message(
+                        telegram_id,
+                        "✅ *Добро пожаловать!*\n\n"
+                        "Ваш доступ активирован. "
+                        "Теперь вы можете пользоваться VPN.",
+                        parse_mode='Markdown',
+                        reply_markup=user_main_keyboard(telegram_id)
+                    )
+                else:
+                    bot.send_message(
+                        telegram_id,
+                        "❌ Ошибка активации. Обратитесь к админу."
+                    )
             else:
                 bot.send_message(
                     telegram_id,
-                    "❌ Ошибка активации. Обратитесь к админу."
+                    "❌ *Неверный инвайт-код*\n\n"
+                    "Ссылка недействительна или истекла. "
+                    "Обратитесь к администратору.",
+                    parse_mode='Markdown'
                 )
         else:
             bot.send_message(
@@ -581,7 +774,7 @@ def handle_start(message):
             f"Добро пожаловать, {user['telegram_first_name']}!\n"
             f"Статус: ✅ Активен",
             parse_mode='Markdown',
-            reply_markup=user_main_keyboard()
+            reply_markup=user_main_keyboard(telegram_id)
         )
 
     logger.info(f"Пользователь {telegram_id} запустил /start")
@@ -597,20 +790,40 @@ def handle_my_devices(message):
     if not user:
         return
 
-    # TODO: Запрос к API Hiddify для получения активных подключений
-    # Временный заглушка
-    response = (
-        "📱 *Мои устройства*\n\n"
-        "Активные подключения:\n\n"
-        "┌────────────────────────────┐\n"
-        "│ 📱 iPhone 15 Pro            │\n"
-        "│ Москва, Россия              │\n"
-        "│ Подключен: 2 мин назад     │\n"
-        "│ Протокол: VLESS-Reality    │\n"
-        "│ Трафик: 1.2 GB / 100 GB    │\n"
-        "└────────────────────────────┘\n\n"
-        "*(функционал в разработке)*"
-    )
+    # Попробовать получить активные подключения через Hiddify API
+    connections = []
+    if HiddifyAPI and user.get('vless_uuid'):
+        try:
+            api = HiddifyAPI()
+            connections = api.get_user_connections(user['vless_uuid'])
+        except Exception as e:
+            logger.warning(f"Не удалось получить подключения: {e}")
+
+    if connections:
+        response = "📱 *Мои устройства*\n\nАктивные подключения:\n\n"
+        for conn in connections[:10]:  # Максимум 10 подключений
+            device = conn.get('device', 'Неизвестное устройство')
+            location = conn.get('location', 'N/A')
+            connected_at = conn.get('connected_at', 'N/A')
+            protocol = conn.get('protocol', 'N/A')
+
+            response += (
+                f"┌────────────────────────────┐\n"
+                f"│ 📱 {device:<24} │\n"
+                f"│ 📍 {location:<24} │\n"
+                f"│ ⏰ {connected_at:<23} │\n"
+                f"│ 🔐 {protocol:<23} │\n"
+                f"└────────────────────────────┘\n\n"
+            )
+    else:
+        # Заглушка если API недоступен
+        response = (
+            "📱 *Мои устройства*\n\n"
+            "Активные подключения:\n\n"
+            "Нет данных о подключениях\n\n"
+        )
+        if not HiddifyAPI:
+            response += "*(API интеграция в процессе настройки)*"
 
     bot.send_message(telegram_id, response, parse_mode='Markdown')
 
@@ -824,13 +1037,35 @@ def handle_invite(message):
     if not user:
         return
 
-    # TODO: Реализовать систему инвайтов и подсчёт приглашённых
+    # Проверка прав на приглашение (v3.1.1)
+    if can_invite_users and not can_invite_users(telegram_id):
+        bot.send_message(
+            telegram_id,
+            "❌ *Доступ запрещён*\n\n"
+            "Функция приглашения доступна только для менеджеров и администраторов.",
+            parse_mode='Markdown'
+        )
+        return
+
+    # Получить количество приглашённых
+    invited_count = 0
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    try:
+        cursor.execute('SELECT COUNT(*) FROM users WHERE invited_by = ?', (telegram_id,))
+        invited_count = cursor.fetchone()[0]
+    except Exception:
+        pass
+    finally:
+        conn.close()
+
     invite_link = f"https://t.me/{bot.get_me().username}?start={user['invite_code']}"
 
     response = (
         f"👥 *Пригласить друга*\n\n"
         f"Поделитесь ссылкой для регистрации:\n\n"
         f"`{invite_link}`\n\n"
+        f"Вы пригласили: {invited_count} человек\n\n"
         f"После перехода по ссылке:\n"
         f"• Друг автоматически получит доступ\n"
         f"• Вам не нужно ничего оплачивать\n"
@@ -860,15 +1095,37 @@ def handle_admin_users(message):
     if not is_admin(telegram_id):
         return
 
-    # TODO: Получить список пользователей из БД
-    bot.send_message(
-        telegram_id,
-        "👥 *Пользователи*\n\n"
-        "(функционал в разработке)\n\n"
-        "Всего: 0\n"
-        "Активных: 0",
-        parse_mode='Markdown'
-    )
+    # Получить список пользователей
+    users = get_users_list(limit=50)
+
+    if not users:
+        bot.send_message(
+            telegram_id,
+            "👥 *Пользователи*\n\n"
+            "Пользователей нет",
+            parse_mode='Markdown'
+        )
+        return
+
+    # Формировать сообщение
+    response = "👥 *Пользователи* (последние 50)\n\n"
+
+    for user in users[:20]:  # Показываем первые 20
+        username = user.get('telegram_username') or user.get('telegram_first_name', 'Без имени')
+        status = "✅" if user.get('is_active') else "❌"
+        trial = " 🎁" if user.get('is_trial') else ""
+        created = user.get('created_at', 'N/A')[:10] if user.get('created_at') else 'N/A'
+
+        response += f"{status} @{username}{trial}\n"
+        response += f"   ID: {user['telegram_id']} | {created}\n\n"
+
+    response += f"Всего: {len(users)}"
+
+    # Проверка длины сообщения
+    if len(response.encode('utf-8')) > MAX_MESSAGE_LENGTH:
+        response = "👥 *Пользователи*\n\n" + f"Всего: {len(users)}\n\nСлишком много для отображения"
+
+    bot.send_message(telegram_id, response, parse_mode='Markdown')
 
 
 @bot.message_handler(func=lambda message: message.text == "➕ Создать юзера")
@@ -973,19 +1230,40 @@ def handle_admin_stats(message):
     if not is_admin(telegram_id):
         return
 
-    # TODO: Получить реальную статистику
-    bot.send_message(
-        telegram_id,
+    # Получить статистику из SQLite
+    stats = get_users_stats()
+
+    # Попробовать получить статистику из Hiddify API
+    api_stats = {}
+    if HiddifyAPI:
+        try:
+            api = HiddifyAPI()
+            api_stats = api.get_stats()
+        except Exception as e:
+            logger.warning(f"Не удалось получить статистику из API: {e}")
+
+    # Формирование сообщения
+    response = (
         "📈 *Статистика системы*\n\n"
-        "Период: Сегодня\n\n"
-        "👥 Пользователи:\n"
-        "Всего: 0\n"
-        "Активных: 0\n\n"
-        "📊 Трафик:\n"
-        "Сегодня: 0 GB\n\n"
-        "(функционал в разработке)",
-        parse_mode='Markdown'
+        f"👥 Пользователи:\n"
+        f"Всего: {stats['total_users']}\n"
+        f"Активных: {stats['active_users']}\n"
+        f"Trial: {stats['trial_users']}\n"
+        f"Заблокировано: {stats['blocked_users']}\n\n"
     )
+
+    if api_stats:
+        today_traffic = api_stats.get('today_traffic', 'N/A')
+        month_traffic = api_stats.get('month_traffic', 'N/A')
+        response += (
+            f"📊 Трафик:\n"
+            f"Сегодня: {today_traffic}\n"
+            f"Месяц: {month_traffic}\n\n"
+        )
+
+    response += f"📅 Дата: {datetime.now().strftime('%d.%m.%Y %H:%M')}"
+
+    bot.send_message(telegram_id, response, parse_mode='Markdown')
 
 
 @bot.message_handler(func=lambda message: message.text == "⚙️ Настройки")
@@ -1056,7 +1334,7 @@ def handle_admin_exit(message):
     bot.send_message(
         telegram_id,
         "👋 Выход из админки...",
-        reply_markup=user_main_keyboard()
+        reply_markup=user_main_keyboard(telegram_id)
     )
 
 
@@ -1076,7 +1354,7 @@ def handle_cancel_callback(call):
             telegram_id,
             "❌ *Операция отменена*",
             parse_mode='Markdown',
-            reply_markup=admin_main_keyboard() if is_admin(telegram_id) else user_main_keyboard()
+            reply_markup=admin_main_keyboard() if is_admin(telegram_id) else user_main_keyboard(telegram_id)
         )
     else:
         bot.answer_callback_query(call.id, "Нет активных операций", show_alert=True)
@@ -1084,7 +1362,7 @@ def handle_cancel_callback(call):
 
 @bot.callback_query_handler(func=lambda call: call.data == 'confirm_create_user')
 def handle_confirm_create_user(call):
-    """Подтверждение создания пользователя"""
+    """Подтверждение создания пользователя - РЕАЛЬНОЕ создание"""
 
     telegram_id = call.message.chat.id
 
@@ -1099,24 +1377,115 @@ def handle_confirm_create_user(call):
         return
 
     username = state['data'].get('username')
+    data_limit = 100  # GB
+    expire_days = 30
 
-    # TODO: Реальное создание пользователя в БД
-    # Сейчас это заглушка - нужно вызвать create_user() с параметрами
+    try:
+        # 1. Проверить, существует ли пользователь с таким username
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute('SELECT id FROM users WHERE telegram_username = ?', (username,))
+        existing = cursor.fetchone()
+        conn.close()
 
-    clear_user_state(telegram_id)
+        if existing:
+            clear_user_state(telegram_id)
+            bot.answer_callback_query(call.id, "Пользователь уже существует", show_alert=True)
+            bot.send_message(
+                telegram_id,
+                f"⚠️ Пользователь {username} уже существует в системе.",
+                parse_mode='Markdown',
+                reply_markup=admin_main_keyboard()
+            )
+            return
 
-    bot.answer_callback_query(call.id, "Пользователь создан")
-    bot.send_message(
-        telegram_id,
-        f"✅ *Пользователь {username} создан!*\n\n"
-        f"(функционал в разработке)\n\n"
-        f"Лимит: 100 GB\n"
-        f"Срок: 30 дней",
-        parse_mode='Markdown',
-        reply_markup=admin_main_keyboard()
-    )
+        # 2. Создать запись в SQLite
+        # Используем telegram_id = 0 как временное значение (пользователь ещё не в боте)
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
 
-    logger.info(f"Admin {telegram_id} created user: {username}")
+        # Генерация UUID и паролей
+        vless_uuid = str(uuid.uuid4())
+        hysteria2_password = os.urandom(16).hex()
+        ss2022_password = os.urandom(32).hex()
+        invite_code = f"INV_{os.urandom(8).hex()}"
+        expires_at = datetime.now() + timedelta(days=expire_days)
+
+        cursor.execute('''
+            INSERT INTO users (
+                telegram_id, telegram_username, telegram_first_name,
+                data_limit_bytes, expire_days, expires_at,
+                vless_uuid, hysteria2_password, ss2022_password, invite_code
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            0,  # Временное значение - пользователь ещё не в боте
+            username,
+            username.split('@')[-1],  # Имя без @
+            data_limit * 1024**3,
+            expire_days,
+            expires_at.isoformat(),
+            vless_uuid,
+            hysteria2_password,
+            ss2022_password,
+            invite_code
+        ))
+
+        user_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+
+        # 3. Попытка создать через Hiddify API (если доступен)
+        api_success = False
+        if HiddifyAPI:
+            try:
+                api = HiddifyAPI()
+                api.create_user(
+                    username=username,
+                    data_limit_gb=data_limit,
+                    expire_days=expire_days
+                )
+                api_success = True
+                logger.info(f"Пользователь {username} создан через Hiddify API")
+            except HiddifyAPIError as e:
+                logger.warning(f"Не удалось создать пользователя через API: {e}")
+            except Exception as e:
+                logger.error(f"Ошибка API: {e}")
+
+        # 4. Отправить результат
+        clear_user_state(telegram_id)
+        bot.answer_callback_query(call.id, "Пользователь создан")
+
+        result_message = (
+            f"✅ *Пользователь {username} создан!*\n\n"
+            f"📦 Лимит: {data_limit} GB\n"
+            f"📅 Срок: {expire_days} дней\n"
+            f"🔑 UUID: `{vless_uuid[:8]}...{vless_uuid[-4:]}`\n\n"
+        )
+
+        if api_success:
+            result_message += "✅ Создан в Hiddify Panel"
+        else:
+            result_message += "⚠️ Создан только в локальной БД (API недоступен)"
+
+        bot.send_message(
+            telegram_id,
+            result_message,
+            parse_mode='Markdown',
+            reply_markup=admin_main_keyboard()
+        )
+
+        logger.info(f"Admin {telegram_id} created user: {username} (ID: {user_id})")
+
+    except Exception as e:
+        logger.error(f"Ошибка создания пользователя: {e}")
+        clear_user_state(telegram_id)
+        bot.answer_callback_query(call.id, "Ошибка создания", show_alert=True)
+        bot.send_message(
+            telegram_id,
+            f"❌ Ошибка создания пользователя: {e}",
+            parse_mode='Markdown',
+            reply_markup=admin_main_keyboard()
+        )
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('protocol_'))
@@ -1274,6 +1643,12 @@ def handle_invite_copy(call):
     """Обработка копирования инвайт-ссылки"""
 
     telegram_id = call.message.chat.id
+
+    # Проверка прав на приглашение (v3.1.1)
+    if can_invite_users and not can_invite_users(telegram_id):
+        bot.answer_callback_query(call.id, "❌ У вас нет прав для этой операции")
+        return
+
     user = get_user(telegram_id)
 
     if not user:
@@ -1320,6 +1695,190 @@ def handle_support_callbacks(call):
     )
 
     bot.answer_callback_query(call.id)
+
+
+# ============================================================================
+# CALLBACK HANDLERS - УПРАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯМИ
+# ============================================================================
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('user_info_'))
+def handle_user_info(call):
+    """Показать информацию о пользователе"""
+
+    telegram_id = call.message.chat.id
+
+    if not is_admin(telegram_id):
+        bot.answer_callback_query(call.id, "Нет прав")
+        return
+
+    user_id = int(call.data.split('_')[2])
+
+    user = get_user(user_id)
+    if not user:
+        bot.answer_callback_query(call.id, "Пользователь не найден", show_alert=True)
+        return
+
+    info = (
+        f"📋 *Информация о пользователе*\n\n"
+        f"ID: {user['id']}\n"
+        f"Telegram: @{user.get('telegram_username', 'N/A')}\n"
+        f"Имя: {user.get('telegram_first_name', 'N/A')}\n"
+        f"Тип: {user.get('user_type', 'private')}\n\n"
+        f"📦 Лимит: {user['data_limit_bytes'] / (1024**3):.0f} GB\n"
+        f"📅 Истекает: {user.get('expires_at', 'Бессрочно')}\n\n"
+        f"✅ Активен: {'Да' if user['is_active'] else 'Нет'}\n"
+        f"🔒 Заблокирован: {'Да' if user['is_blocked'] else 'Нет'}\n"
+    )
+
+    bot.send_message(telegram_id, info, parse_mode='Markdown')
+    bot.answer_callback_query(call.id)
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('user_extend_'))
+def handle_user_extend(call):
+    """Продлить подписку пользователю"""
+
+    telegram_id = call.message.chat.id
+
+    if not is_admin(telegram_id):
+        bot.answer_callback_query(call.id, "Нет прав")
+        return
+
+    user_db_id = int(call.data.split('_')[2])
+
+    # Продлеваем на 30 дней по умолчанию
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    # Получаем текущую дату истечения
+    cursor.execute('SELECT expires_at FROM users WHERE id = ?', (user_db_id,))
+    row = cursor.fetchone()
+
+    if not row:
+        conn.close()
+        bot.answer_callback_query(call.id, "Пользователь не найден", show_alert=True)
+        return
+
+    current_expire = row[0]
+
+    # Если даты нет или истекла - от сегодня, иначе от текущей даты
+    if not current_expire:
+        base_date = datetime.now()
+    else:
+        try:
+            base_date = datetime.fromisoformat(current_expire)
+            if base_date < datetime.now():
+                base_date = datetime.now()
+        except:
+            base_date = datetime.now()
+
+    new_expire = base_date + timedelta(days=30)
+
+    cursor.execute('UPDATE users SET expires_at = ? WHERE id = ?', (new_expire.isoformat(), user_db_id))
+    conn.commit()
+    conn.close()
+
+    bot.answer_callback_query(call.id, "Продлено на 30 дней")
+    logger.info(f"Admin {telegram_id} extended user {user_db_id} until {new_expire}")
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('user_block_'))
+def handle_user_block(call):
+    """Заблокировать/разблокировать пользователя"""
+
+    telegram_id = call.message.chat.id
+
+    if not is_admin(telegram_id):
+        bot.answer_callback_query(call.id, "Нет прав")
+        return
+
+    user_db_id = int(call.data.split('_')[2])
+
+    # Переключаем статус блокировки
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    cursor.execute('SELECT is_blocked FROM users WHERE id = ?', (user_db_id,))
+    row = cursor.fetchone()
+
+    if not row:
+        conn.close()
+        bot.answer_callback_query(call.id, "Пользователь не найден", show_alert=True)
+        return
+
+    current_status = row[0]
+    new_status = not current_status
+
+    cursor.execute('UPDATE users SET is_blocked = ? WHERE id = ?', (new_status, user_db_id))
+    conn.commit()
+    conn.close()
+
+    action = "заблокирован" if new_status else "разблокирован"
+    bot.answer_callback_query(call.id, f"Пользователь {action}")
+    logger.info(f"Admin {telegram_id} {'blocked' if new_status else 'unblocked'} user {user_db_id}")
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('user_delete_'))
+def handle_user_delete(call):
+    """Удалить пользователя"""
+
+    telegram_id = call.message.chat.id
+
+    if not is_admin(telegram_id):
+        bot.answer_callback_query(call.id, "Нет прав")
+        return
+
+    user_db_id = int(call.data.split('_')[2])
+
+    # Удаляем из БД
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM users WHERE id = ?', (user_db_id,))
+    conn.commit()
+    conn.close()
+
+    bot.answer_callback_query(call.id, "Пользователь удалён")
+    bot.send_message(
+        telegram_id,
+        "🗑️ Пользователь удалён",
+        reply_markup=admin_main_keyboard()
+    )
+    logger.info(f"Admin {telegram_id} deleted user {user_db_id}")
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('user_limit_'))
+def handle_user_limit(call):
+    """Изменить лимит трафика"""
+
+    telegram_id = call.message.chat.id
+
+    if not is_admin(telegram_id):
+        bot.answer_callback_query(call.id, "Нет прав")
+        return
+
+    user_db_id = int(call.data.split('_')[2])
+
+    # Увеличиваем лимит на 50 GB
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    cursor.execute('SELECT data_limit_bytes FROM users WHERE id = ?', (user_db_id,))
+    row = cursor.fetchone()
+
+    if not row:
+        conn.close()
+        bot.answer_callback_query(call.id, "Пользователь не найден", show_alert=True)
+        return
+
+    current_limit = row[0]
+    new_limit = current_limit + (50 * 1024**3)  # +50 GB
+
+    cursor.execute('UPDATE users SET data_limit_bytes = ? WHERE id = ?', (new_limit, user_db_id))
+    conn.commit()
+    conn.close()
+
+    bot.answer_callback_query(call.id, f"Лимит увеличен на 50 GB")
+    logger.info(f"Admin {telegram_id} increased limit for user {user_db_id} to {new_limit / (1024**3):.0f} GB")
 
 
 # ============================================================================
