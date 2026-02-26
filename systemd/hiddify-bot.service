@@ -1,29 +1,44 @@
 [Unit]
-Description=Hiddify Manager Telegram Bot v3.0
-Documentation=https://github.com/hiddify/Hiddify-Manager
-After=network.target hiddify-manager.service
-Wants=hiddify-manager.service
+Description=Hiddify VPN Bot v4.0 with PostgreSQL and Redis
+Documentation=https://github.com/hiddify/hiddify-manager
+After=network.target postgresql.service redis.service
+Wants=postgresql.service redis.service
 
 [Service]
 Type=simple
-User=root
+User=hiddify
+Group=hiddify
 WorkingDirectory=/opt/hiddify-manager
-Environment="PYTHONUNBUFFERED=1"
-Environment="PATH=/usr/local/bin:/usr/bin:/bin"
-ExecStartPre=/bin/bash -c 'test -f /opt/hiddify-manager/.env || exit 1'
-ExecStart=/usr/bin/python3 /opt/hiddify-manager/scripts/monitor_bot.py
-Restart=always
-RestartSec=10
+
+# Environment
+Environment="PATH=/opt/hiddify-manager/venv/bin:/usr/local/bin:/usr/bin:/bin"
+EnvironmentFile=-/opt/hiddify-manager/.env
+
+# Logging
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=hiddify-bot
 
-# Безопасность
+# Restart policy
+Restart=always
+RestartSec=10
+StartLimitInterval=60
+StartLimitBurst=3
+
+# Security
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
 ReadWritePaths=/opt/hiddify-manager/data /opt/hiddify-manager/logs
+
+# Execution
+ExecStart=/opt/hiddify-manager/venv/bin/python /opt/hiddify-manager/scripts/monitor_bot.py
+
+# Graceful shutdown
+TimeoutStopSec=30
+KillSignal=SIGTERM
+KillMode=mixed
 
 [Install]
 WantedBy=multi-user.target

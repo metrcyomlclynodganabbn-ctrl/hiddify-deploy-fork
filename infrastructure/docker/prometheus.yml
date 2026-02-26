@@ -1,0 +1,22 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    service: 'hiddify-bot'
+    environment: 'production'
+
+rule_files:
+  # - "alert.rules.yml"
+
+scrape_configs:
+  # Метрики бота
+  - job_name: 'telegram-bot'
+    static_configs:
+      - targets: ['telegram-bot:9090']
+        labels:
+          service: 'telegram-bot'
+
+  # Метрики самого Prometheus (опционально)
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
