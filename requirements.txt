@@ -3,7 +3,7 @@
 
 # === Core Telegram ===
 aiogram>=3.5.0,<4.0.0
-python-telegram-bot>=20.0
+pyTelegramBotAPI>=4.14.0  # telebot
 
 # === Database ===
 # PostgreSQL драйвер
