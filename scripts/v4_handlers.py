@@ -33,48 +33,46 @@ try:
         SupportTicketCreate, TicketCategory, TicketPriority,
         SubscriptionPlan, SubscriptionPlanDetails
     )
+
+    # Определение планов подписки (только при успешном импорте)
+    PLANS = {
+        "weekly": SubscriptionPlanDetails(
+            code=SubscriptionPlan.WEEKLY,
+            name="Неделя",
+            description="Доступ на 7 дней",
+            price=Decimal("3.00"),
+            currency="USD",
+            duration_days=7,
+            data_limit_bytes=10 * 1024 * 1024 * 1024,  # 10 GB
+            features=["До 10 GB трафика", "7 дней доступа", "Standard скорость"]
+        ),
+        "monthly": SubscriptionPlanDetails(
+            code=SubscriptionPlan.MONTHLY,
+            name="Месяц",
+            description="Доступ на 30 дней",
+            price=Decimal("10.00"),
+            currency="USD",
+            duration_days=30,
+            data_limit_bytes=50 * 1024 * 1024 * 1024,  # 50 GB
+            features=["До 50 GB трафика", "30 дней доступа", "Высокая скорость"]
+        ),
+        "quarterly": SubscriptionPlanDetails(
+            code=SubscriptionPlan.QUARTERLY,
+            name="Квартал",
+            description="Доступ на 90 дней",
+            price=Decimal("25.00"),
+            currency="USD",
+            duration_days=90,
+            data_limit_bytes=200 * 1024 * 1024 * 1024,  # 200 GB
+            features=["До 200 GB трафика", "90 дней доступа", "Приоритетная поддержка"]
+        ),
+    }
+
     V4_AVAILABLE = True
 except ImportError as e:
     logger.warning(f"v4.0 модули не доступны: {e}")
     V4_AVAILABLE = False
-
-
-# ============================================================================
-# PAYMENT HANDLERS
-# ============================================================================
-
-PLANS = {
-    "weekly": SubscriptionPlanDetails(
-        code=SubscriptionPlan.WEEKLY,
-        name="Неделя",
-        description="Доступ на 7 дней",
-        price=Decimal("3.00"),
-        currency="USD",
-        duration_days=7,
-        data_limit_bytes=10 * 1024 * 1024 * 1024,  # 10 GB
-        features=["До 10 GB трафика", "7 дней доступа", "Standard скорость"]
-    ),
-    "monthly": SubscriptionPlanDetails(
-        code=SubscriptionPlan.MONTHLY,
-        name="Месяц",
-        description="Доступ на 30 дней",
-        price=Decimal("10.00"),
-        currency="USD",
-        duration_days=30,
-        data_limit_bytes=50 * 1024 * 1024 * 1024,  # 50 GB
-        features=["До 50 GB трафика", "30 дней доступа", "Высокая скорость"]
-    ),
-    "quarterly": SubscriptionPlanDetails(
-        code=SubscriptionPlan.QUARTERLY,
-        name="Квартал",
-        description="Доступ на 90 дней",
-        price=Decimal("25.00"),
-        currency="USD",
-        duration_days=90,
-        data_limit_bytes=200 * 1024 * 1024 * 1024,  # 200 GB
-        features=["До 200 GB трафика", "90 дней доступа", "Приоритетная поддержка"]
-    ),
-}
+    PLANS = {}  # Пустой словарь при ошибке импорта
 
 
 def register_payment_handlers(bot):
