@@ -121,3 +121,36 @@ def get_db() -> Database:
     if _db is None:
         _db = Database()
     return _db
+
+
+# Обёртка для обратной совместимости с v4.0 модулями
+# Возвращает синхронное соединение для SQLite
+def get_db_connection(db_path: str = None):
+    """
+    Обёртка для обратной совместимости
+
+    Args:
+        db_path: Путь к БД (опционально, используется путь по умолчанию)
+
+    Returns:
+        Контекст менеджер для работы с БД
+
+    Note:
+        Для v4.0 с PostgreSQL используйте asyncpg напрямую
+    """
+    import os
+    from contextlib import contextmanager
+
+    if db_path is None:
+        db_path = os.getenv('DB_PATH', str(DB_PATH))
+
+    @contextmanager
+    def _get_connection():
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        try:
+            yield conn
+        finally:
+            conn.close()
+
+    return _get_connection()

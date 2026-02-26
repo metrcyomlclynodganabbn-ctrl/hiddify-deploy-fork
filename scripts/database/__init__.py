@@ -1,18 +1,12 @@
-"""
-Database module for Hiddify VPN Bot
+"""Database модуль для работы с БД"""
 
-Единый слой работы с БД с:
-- Connection pooling для каждого потока
-- WAL mode для конкурентного доступа
-- Pydantic валидация данных
-"""
+from .connection import Database
+from .models import *
 
-from .connection import Database, get_db
-from .models import InviteCodeCreate, InviteCodeResponse
+# Создаём глобальный экземпляр
+db = Database()
 
 __all__ = [
     'Database',
-    'get_db',
-    'InviteCodeCreate',
-    'InviteCodeResponse',
+    'db',
 ]
