@@ -1,0 +1,210 @@
+# Патч для monitor_bot.py — Добавление VLESS URL генерации
+
+## 1. Добавить импорты в начало файла (после существующих импортов)
+
+```python
+import os
+import sys
+import sqlite3
+import logging
+import uuid
+import json
+from datetime import datetime, timedelta
+from functools import wraps
+from telebot import TeleBot, types
+from dotenv import load_dotenv
+
+# ДОБАВИТЬ:
+try:
+    import qrcode
+    from io import BytesIO
+    QR_CODE_AVAILABLE = True
+except ImportError:
+    QR_CODE_AVAILABLE = False
+```
+
+## 2. Добавить функции генерации VLESS URL (перед init_db())
+
+```python
+# ============================================================================
+# VLESS URL ГЕНЕРАТОР
+# ============================================================================
+
+def generate_vless_url(user_uuid: str, server_ip: str, port: int,
+                        public_key: str, sni: str = "www.apple.com",
+                        flow: str = "xtls-rprx-vision", label: str = "SKRT-VPN") -> str:
+    """
+    Генерирует VLESS-Reality URL для импорта в клиент
+    """
+    base = f"vless://{user_uuid}@{server_ip}:{port}"
+
+    params = [
+        "encryption=none",
+        f"flow={flow}",
+        "security=reality",
+        f"sni={sni}",
+        "fp=chrome",
+        f"pbk={public_key}",
+        "type=tcp",
+        "header=none"
+    ]
+
+    url = f"{base}?{'&'.join(params)}#{label}"
+    return url
+
+
+def generate_vless_qr(url: str):
+    """
+    Генерирует QR код для VLESS URL
+    Возвращает путь к временному файлу с QR кодом
+    """
+    if not QR_CODE_AVAILABLE:
+        return None
+
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_L,
+        box_size=10,
+        border=4,
+    )
+    qr.add_data(url)
+    qr.make(fit=True)
+
+    img = qr.make_image(fill_color="black", back_color="white")
+
+    import tempfile
+    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+    img.save(temp_file, format='PNG')
+    temp_file.close()
+
+    return temp_file.name
+```
+
+## 3. Заменить функцию handle_protocol_selection
+
+Найти строку 725: `@bot.callback_query_handler(func=lambda call: call.data.startswith('protocol_'))`
+
+Заменить всю функцию на:
+
+```python
+@bot.callback_query_handler(func=lambda call: call.data.startswith('protocol_'))
+def handle_protocol_selection(call):
+    """Обработка выбора протокола"""
+
+    telegram_id = call.message.chat.id
+    protocol = call.data.split('_')[1]
+
+    user = get_user(telegram_id)
+
+    if not user:
+        bot.answer_callback_query(call.id, "Пользователь не найден")
+        return
+
+    # Получаем параметры из .env
+    vps_ip = os.getenv('VPS_IP', '5.45.114.73')
+    reality_public_key = os.getenv('REALITY_PUBLIC_KEY', '')
+    reality_sni = os.getenv('REALITY_SNI', 'www.apple.com')
+    vless_port = int(os.getenv('VLESS_PORT', '443'))
+
+    if protocol == 'vless':
+        # Используем UUID пользователя или генерируем
+        user_uuid = user.get('vless_uuid') or str(uuid.uuid4())
+
+        # Генерируем VLESS URL
+        vless_url = generate_vless_url(
+            user_uuid=user_uuid,
+            server_ip=vps_ip,
+            port=vless_port,
+            public_key=reality_public_key,
+            sni=reality_sni,
+            label=f"SKRT-VPN-{user['telegram_first_name']}"
+        )
+
+        config_name = "VLESS-Reality ⭐"
+
+        # Отправляем текстовый URL
+        bot.send_message(
+            telegram_id,
+            f"📋 *{config_name}*\n\n"
+            f"```\n{vless_url}\n```\n\n"
+            f"📱 *Инструкция:*\n"
+            f"1. Скопируйте ссылку выше\n"
+            f"2. Откройте Nekobox/V2Ray\n"
+            f"3. Импорт из буфера обмена\n"
+            f"4. Подключитесь",
+            parse_mode='Markdown'
+        )
+
+        # Генерируем и отправляем QR код
+        qr_file = generate_vless_qr(vless_url)
+        if qr_file:
+            try:
+                with open(qr_file, 'rb') as qr:
+                    bot.send_photo(
+                        telegram_id,
+                        qr,
+                        caption="📷 *Отсканируйте QR код* для быстрого импорта",
+                        parse_mode='Markdown'
+                    )
+                # Удаляем временный файл
+                os.unlink(qr_file)
+            except Exception as e:
+                logger.error(f"QR code error: {e}")
+
+    elif protocol == 'hysteria2':
+        # TODO: Реализовать Hysteria2
+        config_link = f"hysteria2://{user['hysteria2_password']}@{vps_ip}:443/?sni={reality_sni}"
+        config_name = "Hysteria2 🚀"
+
+        bot.send_message(
+            telegram_id,
+            f"📋 *{config_name}*\n\n"
+            f"```\n{config_link}\n```\n\n"
+            f"Протокол в разработке",
+            parse_mode='Markdown'
+        )
+    else:
+        # TODO: Реализовать SS-2022
+        config_link = f"ss2022://{user['ss2022_password']}@{vps_ip}:8388"
+        config_name = "Shadowsocks-2022 🔒"
+
+        bot.send_message(
+            telegram_id,
+            f"📋 *{config_name}*\n\n"
+            f"```\n{config_link}\n```\n\n"
+            f"Протокол в разработке",
+            parse_mode='Markdown'
+        )
+
+    bot.answer_callback_query(call.id, "Конфигурация отправлена")
+```
+
+## 4. Обновить .env с Reality ключами
+
+```
+REALITY_PUBLIC_KEY=whqp8uteAFCE34Pdnq__-M0RlSKJYnAxcxTl7DQzhI0
+REALITY_PRIVATE_KEY=GIzQluwly3dtqukxdVG1hPIU7lRLwiYHmw4x4tZomkM
+REALITY_SNI=www.apple.com
+VLESS_PORT=443
+```
+
+## 5. Перезапустить бота
+
+```bash
+ssh root@5.45.114.73 "systemctl restart hiddify-bot"
+```
+
+---
+
+## Проверка
+
+После обновления:
+1. Открыть бота @SKRTvpnbot
+2. Нажать "🔗 Получить ключ"
+3. Выбрать "VLESS-Reality ⭐"
+4. Должен прийти:
+   - Текстовый VLESS URL
+   - QR код для сканирования
+   - Инструкция по импорту
+
+5. Импортировать в Nekobox и проверить подключение

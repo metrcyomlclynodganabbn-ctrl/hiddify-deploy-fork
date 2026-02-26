@@ -1,0 +1,105 @@
+[MASTER]
+# Использовать несколько процессов для ускорения проверки
+jobs=1
+
+# Загрузить спецификации C-расширений
+extension-pkg-whitelist=
+
+# Добавить файлы или директории к черному списку
+ignore=CVS
+
+# Добавить файлы или каталоги к списку пропускаемых
+ignore=CVS
+
+# Кэшировать результаты предыдущих запусков
+persistent=yes
+
+# Использовать pickle для кэша
+pickle-cache-data=yes
+
+[MESSAGES CONTROL]
+# Отключить предупреждение о слишком коротких имен переменных
+disable=
+    C0111,  # missing-docstring
+    C0103,  # invalid-name (для коротких имён в циклах)
+    R0903,  # too-few-public-methods
+    R0913,  # too-many-arguments
+    W0212,  # protected-access
+    R0914,  # too-many-locals
+    W0613,  # unused-argument
+    C0114,  # missing-module-docstring
+    C0115,  # missing-class-docstring
+
+[REPORTS]
+# Формат вывода текстового отчета
+output-format=text
+
+# Включить ли сообщения
+reports=yes
+
+# Оценка сложности кода
+evaluation=10.0 - ((float(5 * error + warning + refactor + convention) / statement) * 10)
+
+[TYPECHECK]
+# Интерпретировать имена как functools, ABC, threading и т.д.
+ignored-modules=telebot,aiogram
+
+[FORMAT]
+# Максимальная длина строки
+max-line-length=100
+
+# Максимальное количество аргументов
+max-args=7
+
+# Максимальное количество локальных переменных
+max-locals=15
+
+# Максимальное количество возвратов
+max-returns=6
+
+# Максимальное количество ветвлений
+max-branches=12
+
+# Максимальное количество операторов в теле функции
+max-statements=50
+
+# Минимальная длина имени переменной
+min-name-length=1
+
+# Максимальное количество строк в модуле
+max-module-lines=1000
+
+[DESIGN]
+# Максимальное количество аргументов для функций
+max-args=7
+
+# Максимальное количество локальных переменных
+max-locals=15
+
+# Максимальное количество возвращаемых значений
+max-returns=6
+
+# Максимальное количество ветвлений if/else
+max-branches=12
+
+# Максимальное количество операторов в функции
+max-statements=50
+
+# Минимальное количество публичных методов для класса
+min-public-methods=2
+
+# Максимальное количество публичных методов для класса
+max-public-methods=20
+
+# Максимальное количество родительских классов
+max-parents=7
+
+# Максимальное количество атрибутов класса
+max-attributes=7
+
+# Минимальное количество публичных методов для класса
+min-public-methods=2
+
+[BASIC]
+# Хорошие имена переменных
+good-names=i,j,k,ex,Run,_

@@ -13,12 +13,43 @@ failed_users.txt
 admin_password.txt
 DEPLOY_SUCCESS.txt
 .DS_Store
+
+# Python
 __pycache__/
 *.pyc
 *.pyo
+*.pyd
+.Python
 .venv/
 venv/
+ENV/
 *.db
 *.sqlite
 *.sqlite3
+
+# Dev tools
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+*.egg-info/
+dist/
+build/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.tox/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Git
 .worktrees/
+
+# Other
+.bandit/
+

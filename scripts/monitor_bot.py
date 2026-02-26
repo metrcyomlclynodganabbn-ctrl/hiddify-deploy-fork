@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
 """
-Hiddify Manager Telegram Bot v2.0
+Hiddify Manager Telegram Bot v2.1
 Полнофункциональный бот с UI/UX для приватных пользователей и админки
+
+Новое в v2.1:
+- QR код генерация
+- Инструкции для платформ
+- VLESS URL генерация
+- Пробный период
 """
 
 import os
@@ -12,8 +18,21 @@ import uuid
 import json
 from datetime import datetime, timedelta
 from functools import wraps
+from io import BytesIO
 from telebot import TeleBot, types
 from dotenv import load_dotenv
+
+# Локальные модули
+try:
+    from vless_utils import generate_vless_url, validate_vless_url
+    from platform_instructions import get_instruction, get_platform_list
+    from qr_generator import generate_qr_code
+except ImportError:
+    print("⚠️  Модули v2.1 не найдены, использую базовую функциональность")
+    generate_vless_url = None
+    get_instruction = None
+    get_platform_list = None
+    generate_qr_code = None
 
 # Загрузка переменных окружения
 load_dotenv()
@@ -45,6 +64,118 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
+
+
+# ============================================================================
+# КОНСТАНТЫ И ВАЛИДАЦИЯ
+# ============================================================================
+
+MAX_MESSAGE_LENGTH = 4096
+MAX_USERNAME_LENGTH = 32
+MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024  # 20 MB
+
+
+def validate_message_length(text: str) -> bool:
+    """Проверить длину сообщения"""
+    return len(text.encode('utf-8')) <= MAX_MESSAGE_LENGTH
+
+
+def validate_username(username: str) -> tuple[bool, str]:
+    """Валидация username Telegram
+
+    Returns:
+        (is_valid, error_message)
+    """
+    if not username:
+        return False, "Username не может быть пустым"
+
+    if not username.startswith('@'):
+        return False, "Username должен начинаться с @"
+
+    if len(username) > MAX_USERNAME_LENGTH:
+        return False, f"Username слишком длинный (максимум {MAX_USERNAME_LENGTH} символов)"
+
+    # Базовая проверка формата username
+    username_part = username[1:]
+    if not all(c.isalnum() or c in '_-' for c in username_part):
+        return False, "Username содержит недопустимые символы"
+
+    return True, ""
+
+
+def validate_ip_or_domain(input_str: str) -> tuple[bool, str]:
+    """Валидация IP адреса или домена
+
+    Returns:
+        (is_valid, error_message)
+    """
+    if not input_str:
+        return False, "Значение не может быть пустым"
+
+    # Базовая проверка длины
+    if len(input_str) > 253:
+        return False, "Слишком длинное доменное имя"
+
+    # Проверка на IP адрес (IPv4)
+    import ipaddress
+    try:
+        ipaddress.IPv4Address(input_str)
+        return True, ""
+    except ipaddress.AddressValueError:
+        pass
+
+    # Проверка формата домена
+    domain_pattern = r'^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$'
+    import re
+    if not re.match(domain_pattern, input_str):
+        return False, "Некорректный формат домена или IP"
+
+    return True, ""
+
+
+# ============================================================================
+# FSM - МАШИНА СОСТОЯНИЙ
+# ============================================================================
+
+# Простая in-memory FSM для отслеживания состояния пользователей
+# Ключ: telegram_id, Значение: {'state': str, 'data': dict}
+user_states: dict[int, dict] = {}
+
+
+def set_user_state(telegram_id: int, state: str, data: dict = None):
+    """Установить состояние пользователя"""
+    user_states[telegram_id] = {
+        'state': state,
+        'data': data or {}
+    }
+    logger.debug(f"User {telegram_id} state set to: {state}")
+
+
+def get_user_state(telegram_id: int) -> dict | None:
+    """Получить состояние пользователя"""
+    return user_states.get(telegram_id)
+
+
+def clear_user_state(telegram_id: int):
+    """Очистить состояние пользователя"""
+    if telegram_id in user_states:
+        del user_states[telegram_id]
+        logger.debug(f"User {telegram_id} state cleared")
+
+
+def cancel_operation(telegram_id: int) -> bool:
+    """Отменить текущую операцию пользователя
+
+    Returns:
+        True если операция была отменена, False если активных операций нет
+    """
+    state = get_user_state(telegram_id)
+    if state:
+        state_name = state['state']
+        clear_user_state(telegram_id)
+        logger.info(f"User {telegram_id} cancelled operation: {state_name}")
+        return True
+    return False
 
 
 # ============================================================================
@@ -301,6 +432,35 @@ def admin_user_inline_keyboard(user_id):
 # ОБРАБОТЧИКИ КОМАНД - ПОЛЬЗОВАТЕЛЬ
 # ============================================================================
 
+@bot.message_handler(commands=['cancel'])
+def handle_cancel(message):
+    """Обработка команды /cancel - отмена текущей операции"""
+
+    telegram_id = message.chat.id
+
+    if cancel_operation(telegram_id):
+        bot.send_message(
+            telegram_id,
+            "❌ *Операция отменена*\n\n"
+            "Вы можете начать заново или выбрать другое действие.",
+            parse_mode='Markdown',
+            reply_markup=_get_keyboard_for_user(telegram_id)
+        )
+    else:
+        bot.send_message(
+            telegram_id,
+            "ℹ️ Нет активных операций для отмены.",
+            parse_mode='Markdown'
+        )
+
+
+def _get_keyboard_for_user(telegram_id: int):
+    """Получить соответствующую клавиатуру для пользователя"""
+    if is_admin(telegram_id):
+        return admin_main_keyboard()
+    return user_main_keyboard()
+
+
 @bot.message_handler(commands=['start'])
 def handle_start(message):
     """Обработка команды /start"""
@@ -444,7 +604,7 @@ def handle_get_key(message):
 
 @bot.message_handler(func=lambda message: message.text == "📊 Моя подписка")
 def handle_my_subscription(message):
-    """Обработка кнопки 'Моя подписка'"""
+    """Обработка кнопки 'Моя подписка' с поддержкой trial"""
 
     telegram_id = message.chat.id
     user = get_user(telegram_id)
@@ -452,22 +612,56 @@ def handle_my_subscription(message):
     if not user:
         return
 
+    # Проверка на пробный период
+    is_trial = user.get('is_trial', False)
+    trial_expiry = user.get('trial_expiry')
+
+    # Если trial истёк
+    if is_trial and trial_expiry:
+        trial_end = datetime.fromisoformat(trial_expiry)
+        if datetime.now() > trial_end:
+            # Trial истёк, показать предложение продления
+            markup = types.InlineKeyboardMarkup()
+            markup.add(
+                types.InlineKeyboardButton("💳 Купить подписку", callback_data="buy_subscription")
+            )
+
+            bot.send_message(
+                telegram_id,
+                "📊 *Пробный период истёк*\n\n"
+                "Ваш пробный период завершён. Оформите подписку для продолжения использования.",
+                parse_mode='Markdown',
+                reply_markup=markup
+            )
+            return
+
     # Расчёт процента использования трафика
-    used_percent = (user['used_bytes'] / user['data_limit_bytes']) * 100
-    used_gb = user['used_bytes'] / (1024**3)
-    limit_gb = user['data_limit_bytes'] / (1024**3)
+    data_limit = user['data_limit_bytes']
+    used_bytes = user.get('used_bytes', 0)
+    used_percent = (used_bytes / data_limit) * 100 if data_limit > 0 else 0
+    used_gb = used_bytes / (1024**3)
+    limit_gb = data_limit / (1024**3)
 
     # Формирование строки даты истечения
     expire_str = "Бессрочно"
-    if user['expires_at']:
+    days_left = "∞"
+
+    if is_trial and trial_expiry:
+        trial_end = datetime.fromisoformat(trial_expiry)
+        days_left = max(0, (trial_end - datetime.now()).days)
+        expire_str = trial_end.strftime("%d.%m.%Y")
+    elif user['expires_at']:
         expire_date = datetime.fromisoformat(user['expires_at'])
         days_left = (expire_date - datetime.now()).days
         expire_str = expire_date.strftime("%d.%m.%Y")
 
+    # Формирование сообщения
+    subscription_type = "Пробный период" if is_trial else "Приватный"
+
     response = (
         f"📊 *Моя подписка*\n\n"
         f"Статус: ✅ Активен\n\n"
-        f"Тип: Приватный\n"
+        f"Тип: {subscription_type}\n"
         f"Истекает: {expire_str} (осталось {days_left} дней)\n\n"
         f"Лимит трафика:\n"
         f"{used_percent:.1f}% - {used_gb:.1f} GB / {limit_gb:.0f} GB\n\n"
@@ -477,36 +671,112 @@ def handle_my_subscription(message):
         f"{'✅' if user['ss2022_enabled'] else '❌'} Shadowsocks-2022"
     )
 
-    bot.send_message(telegram_id, response, parse_mode='Markdown')
+    # Если не trial и не был активирован, показать кнопку trial
+    if not is_trial and not user.get('trial_activated'):
+        markup = types.InlineKeyboardMarkup()
+        markup.add(
+            types.InlineKeyboardButton("🎁 Активировать пробный период", callback_data="activate_trial")
+        )
+
+        bot.send_message(
+            telegram_id,
+            response + "\n\n💡 *Хотите попробовать бесплатно?*",
+            parse_mode='Markdown',
+            reply_markup=markup
+        )
+    else:
+        bot.send_message(telegram_id, response, parse_mode='Markdown')
+
+
+@bot.callback_query_handler(func=lambda call: call.data == 'activate_trial')
+def handle_activate_trial(call):
+    """
+    Активация пробного периода (7 дней, 10 GB)
+    """
+
+    telegram_id = call.message.chat.id
+    user = get_user(telegram_id)
+
+    if not user:
+        bot.answer_callback_query(call.id, "Пользователь не найден")
+        return
+
+    # Проверка: trial уже активирован?
+    if user.get('trial_activated') or user.get('is_trial'):
+        bot.answer_callback_query(call.id, "Пробный период уже активирован", show_alert=True)
+        return
+
+    # Проверка: есть ли уже активная подписка?
+    if user.get('expires_at'):
+        expire_date = datetime.fromisoformat(user['expires_at'])
+        if expire_date > datetime.now():
+            bot.answer_callback_query(call.id, "У вас уже есть активная подписка", show_alert=True)
+            return
+
+    # Активация trial
+    trial_end = datetime.now() + timedelta(days=7)
+    trial_limit_gb = user.get('trial_data_limit_gb', 10)
+    trial_limit_bytes = trial_limit_gb * (1024**3)
+
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    cursor.execute('''
+        UPDATE users
+        SET is_trial = TRUE,
+            trial_expiry = ?,
+            trial_activated = TRUE,
+            data_limit_bytes = ?,
+            expires_at = ?
+        WHERE telegram_id = ?
+    ''', (trial_end.isoformat(), trial_limit_bytes, trial_end.isoformat(), telegram_id))
+
+    conn.commit()
+    conn.close()
+
+    logger.info(f"Активирован trial для пользователя {telegram_id}")
+
+    bot.send_message(
+        telegram_id,
+        "🎉 *Пробный период активирован!*\n\n"
+        f"📅 Длительность: 7 дней\n"
+        f"📊 Лимит трафика: {trial_limit_gb} GB\n\n"
+        f"⏰ Истекает: {trial_end.strftime('%d.%m.%Y %H:%M')}\n\n"
+        "Нажмите 'Получить ключ' для подключения!",
+        parse_mode='Markdown'
+    )
+
+    bot.answer_callback_query(call.id, "Пробный период активирован")
 
 
 @bot.message_handler(func=lambda message: message.text == "💬 Поддержка")
 def handle_support(message):
-    """Обработка кнопки 'Поддержка'"""
+    """Обработка кнопки 'Поддержка' с инструкциями по платформам"""
 
     telegram_id = message.chat.id
 
     markup = types.InlineKeyboardMarkup(row_width=1)
 
-    btn1 = types.InlineKeyboardButton(
-        "❓ Как подключить? 📱",
-        callback_data="support_guide"
+    # Кнопка выбора платформы (v2.1)
+    btn_platform = types.InlineKeyboardButton(
+        "📱 Инструкция для вашего устройства",
+        callback_data="show_platforms"
     )
-    btn2 = types.InlineKeyboardButton(
+    btn1 = types.InlineKeyboardButton(
         "❓ Медленная скорость? 🐌",
         callback_data="support_speed"
     )
-    btn3 = types.InlineKeyboardButton(
+    btn2 = types.InlineKeyboardButton(
         "❓ Не работает? 🔧",
         callback_data="support_troubleshoot"
     )
 
-    markup.add(btn1, btn2, btn3)
+    markup.add(btn_platform, btn1, btn2)
 
     bot.send_message(
         telegram_id,
         "💬 *Поддержка*\n\n"
-        "Частые вопросы:",
+        "Выберите тему:",
         parse_mode='Markdown',
         reply_markup=markup
     )
@@ -578,13 +848,20 @@ def handle_admin_create_user(message):
     if not is_admin(telegram_id):
         return
 
+    # Установить состояние
+    set_user_state(telegram_id, 'creating_user_step_username')
+
+    markup = types.InlineKeyboardMarkup()
+    markup.add(types.InlineKeyboardButton("❌ Отмена", callback_data="cancel_operation"))
+
     bot.send_message(
         telegram_id,
         "➕ *Создать пользователя*\n\n"
         "Шаг 1 из 2: Введите username Telegram\n\n"
         "Пример: @username\n\n"
         "Или отправьте forward сообщения от пользователя",
-        parse_mode='Markdown'
+        parse_mode='Markdown',
+        reply_markup=markup
     )
 
     bot.register_next_step_handler(message, process_create_user_username)
@@ -596,30 +873,63 @@ def process_create_user_username(message):
     telegram_id = message.chat.id
 
     if not is_admin(telegram_id):
+        clear_user_state(telegram_id)
         return
 
-    username = message.text
-
-    # Валидация
-    if not username.startswith('@'):
+    # Проверка отмены
+    state = get_user_state(telegram_id)
+    if not state or state.get('state') != 'creating_user_step_username':
         bot.send_message(
             telegram_id,
-            "❌ Username должен начинаться с @\n\n"
-            "Попробуйте ещё раз:",
-            parse_mode='Markdown'
+            "⚠️ Операция была прервана. Нажмите 'Создать юзера' для начала.",
+            parse_mode='Markdown',
+            reply_markup=admin_main_keyboard()
+        )
+        clear_user_state(telegram_id)
+        return
+
+    username = message.text.strip()
+
+    # Валидация с использованием новой функции
+    is_valid, error_msg = validate_username(username)
+    if not is_valid:
+        # Добавить кнопку отмены
+        markup = types.InlineKeyboardMarkup()
+        markup.add(types.InlineKeyboardButton("❌ Отмена", callback_data="cancel_operation"))
+
+        bot.send_message(
+            telegram_id,
+            f"❌ {error_msg}\n\n"
+            f"Попробуйте ещё раз или нажмите 'Отмена':",
+            parse_mode='Markdown',
+            reply_markup=markup
         )
         bot.register_next_step_handler(message, process_create_user_username)
         return
 
-    # TODO: Запрос параметров (лимит, срок)
-    # Временное создание с дефолтными значениями
+    # Сохранить username в состояние
+    state['data']['username'] = username
+    set_user_state(telegram_id, 'creating_user_step_confirm', state['data'])
+
+    # Показать подтверждение с кнопками
+    markup = types.InlineKeyboardMarkup(row_width=2)
+    markup.add(
+        types.InlineKeyboardButton("✅ Подтвердить", callback_data="confirm_create_user"),
+        types.InlineKeyboardButton("❌ Отмена", callback_data="cancel_operation")
+    )
+
     bot.send_message(
         telegram_id,
-        f"✅ Пользователь {username} создан!\n\n"
-        f"(функционал в разработке)",
+        f"➕ *Подтверждение создания*\n\n"
+        f"Username: {username}\n\n"
+        f"Лимит трафика: 100 GB\n"
+        f"Срок действия: 30 дней\n\n"
+        f"Создать пользователя?",
         parse_mode='Markdown',
-        reply_markup=admin_main_keyboard()
+        reply_markup=markup
     )
+
+    # Не регистрируем next step handler - ждём callback
 
 
 @bot.message_handler(func=lambda message: message.text == "📈 Статистика")
@@ -722,9 +1032,66 @@ def handle_admin_exit(message):
 # CALLBACK HANDLERS (INLINE BUTTONS)
 # ============================================================================
 
+@bot.callback_query_handler(func=lambda call: call.data == 'cancel_operation')
+def handle_cancel_callback(call):
+    """Обработка кнопки отмены операции"""
+
+    telegram_id = call.message.chat.id
+
+    if cancel_operation(telegram_id):
+        bot.answer_callback_query(call.id, "Операция отменена")
+        bot.send_message(
+            telegram_id,
+            "❌ *Операция отменена*",
+            parse_mode='Markdown',
+            reply_markup=admin_main_keyboard() if is_admin(telegram_id) else user_main_keyboard()
+        )
+    else:
+        bot.answer_callback_query(call.id, "Нет активных операций", show_alert=True)
+
+
+@bot.callback_query_handler(func=lambda call: call.data == 'confirm_create_user')
+def handle_confirm_create_user(call):
+    """Подтверждение создания пользователя"""
+
+    telegram_id = call.message.chat.id
+
+    if not is_admin(telegram_id):
+        bot.answer_callback_query(call.id, "Нет прав")
+        return
+
+    state = get_user_state(telegram_id)
+    if not state or state.get('state') != 'creating_user_step_confirm':
+        bot.answer_callback_query(call.id, "Операция устарела", show_alert=True)
+        clear_user_state(telegram_id)
+        return
+
+    username = state['data'].get('username')
+
+    # TODO: Реальное создание пользователя в БД
+    # Сейчас это заглушка - нужно вызвать create_user() с параметрами
+
+    clear_user_state(telegram_id)
+
+    bot.answer_callback_query(call.id, "Пользователь создан")
+    bot.send_message(
+        telegram_id,
+        f"✅ *Пользователь {username} создан!*\n\n"
+        f"(функционал в разработке)\n\n"
+        f"Лимит: 100 GB\n"
+        f"Срок: 30 дней",
+        parse_mode='Markdown',
+        reply_markup=admin_main_keyboard()
+    )
+
+    logger.info(f"Admin {telegram_id} created user: {username}")
+
+
 @bot.callback_query_handler(func=lambda call: call.data.startswith('protocol_'))
 def handle_protocol_selection(call):
-    """Обработка выбора протокола"""
+    """
+    Обработка выбора протокола с QR кодом и инструкциями
+    """
 
     telegram_id = call.message.chat.id
     protocol = call.data.split('_')[1]
@@ -735,26 +1102,139 @@ def handle_protocol_selection(call):
         bot.answer_callback_query(call.id, "Пользователь не найден")
         return
 
-    # TODO: Генерация конфига для выбранного протокола
+    # Генерация конфига для выбранного протокола
     if protocol == 'vless':
-        config_link = f"https://{PANEL_DOMAIN}/sub/{user['vless_uuid']}"
+        # Используем vless_utils если доступен
+        if generate_vless_url:
+            config_link = generate_vless_url(
+                user_uuid=user['vless_uuid'],
+                name=f"SKRT-VPN-{user.get('telegram_first_name', 'User')}"
+            )
+        else:
+            # Fallback на старый метод
+            config_link = f"vless://{user['vless_uuid']}@{os.getenv('VPS_IP')}:443?encryption=none&flow=xtls-rprx-vision&security=reality&sni=www.apple.com&fp=chrome&pbk={os.getenv('REALITY_PUBLIC_KEY')}&type=tcp&header=none#SKRT-VPN"
+
         config_name = "VLESS-Reality"
+
     elif protocol == 'hysteria2':
-        config_link = f"hysteria2://{user['hysteria2_password']}@{PANEL_DOMAIN}:443/?sni={PANEL_DOMAIN}"
+        config_link = f"hysteria2://{user['hysteria2_password']}@{os.getenv('VPS_IP')}:443/?sni={os.getenv('REALITY_SNI', 'www.apple.com')}&alpn=h3#SKRT-Hysteria2"
         config_name = "Hysteria2"
-    else:
-        config_link = f"ss2022://{user['ss2022_password']}@{PANEL_DOMAIN}:8388"
+
+    else:  # shadowsocks
+        config_link = f"ss2022://{user['ss2022_password']}@{os.getenv('VPS_IP')}:8388/?security=2022-blake3-aes-256-gcm#SKRT-SS2022"
         config_name = "Shadowsocks-2022"
+
+    # Генерация QR кода если доступен
+    if generate_qr_code:
+        try:
+            qr_buffer = generate_qr_code(config_link, box_size=8, border=4)
+
+            bot.send_photo(
+                telegram_id,
+                photo=qr_buffer.getvalue(),
+                caption=f"📋 *Конфигурация: {config_name}*\n\n"
+                        f"🔗 *Ссылка:*\n`{config_link}`\n\n"
+                        f"📱 *Как подключиться:*\n"
+                        f"1. Отсканируйте QR код или скопируйте ссылку\n"
+                        f"2. Откройте клиент (Nekobox/V2Ray)\n"
+                        f"3. Импортируйте конфиг\n"
+                        f"4. Подключитесь\n\n"
+                        f"❓ *Нужна инструкция?* Нажмите /help",
+                parse_mode='Markdown'
+            )
+
+        except Exception as e:
+            logger.error(f"Ошибка генерации QR: {e}")
+            # Fallback без QR
+            bot.send_message(
+                telegram_id,
+                f"📋 *Конфигурация: {config_name}*\n\n"
+                f"<code>{config_link}</code>\n\n"
+                f"📱 *Как подключиться:*\n"
+                f"1. Скопируйте ссылку (длинное нажатие)\n"
+                f"2. Откройте клиент (Nekobox/V2Ray)\n"
+                f"3. Импортируйте из буфера обмена\n"
+                f"4. Подключитесь",
+                parse_mode='HTML'
+            )
+    else:
+        # Без QR кода (старый метод)
+        bot.send_message(
+            telegram_id,
+            f"📋 *Конфигурация: {config_name}*\n\n"
+            f"<code>{config_link}</code>\n\n"
+            f"📱 *Как подключиться:*\n"
+            f"1. Скопируйте ссылку (длинное нажатие)\n"
+            f"2. Откройте клиент (Nekobox/V2Ray)\n"
+            f"3. Импортируйте из буфера обмена\n"
+            f"4. Подключитесь",
+            parse_mode='HTML'
+        )
+
+    bot.answer_callback_query(call.id, "Конфигурация отправлена")
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('platform_'))
+def handle_platform_selection(call):
+    """
+    Обработка выбора платформы для инструкций
+    """
+
+    telegram_id = call.message.chat.id
+    platform = call.data.split('_')[1]  # ios, android, windows, mac, linux
+
+    if not get_instruction:
+        bot.answer_callback_query(call.id, "Инструкции недоступны")
+        return
+
+    instruction = get_instruction(platform)
+
+    message_text = (
+        f"{instruction['icon']} *{instruction['name']}*\n\n"
+        f"{instruction['steps']}\n\n"
+        f"📥 *Скачать клиент:*\n{instruction['download']}"
+    )
+
+    # Создаем кнопку с инструкцией по устранению проблем
+    markup = types.InlineKeyboardMarkup()
+    markup.add(
+        types.InlineKeyboardButton("🔧 Решение проблем", callback_data=f"troubleshoot_{platform}"),
+        types.InlineKeyboardButton("↩️ Назад", callback_data="help")
+    )
 
     bot.send_message(
         telegram_id,
-        f"📋 *Конфигурация: {config_name}*\n\n"
-        f"```json\n{config_link}\n```\n\n"
-        f"Импортируйте этот конфиг в ваш клиент.",
+        message_text,
+        parse_mode='Markdown',
+        reply_markup=markup,
+        disable_web_page_preview=True
+    )
+
+    bot.answer_callback_query(call.id)
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('troubleshoot_'))
+def handle_troubleshoot(call):
+    """
+    Показать инструкцию по устранению проблем
+    """
+
+    telegram_id = call.message.chat.id
+    platform = call.data.split('_')[1]  # ios, android, windows, mac, linux
+
+    if not get_instruction:
+        bot.answer_callback_query(call.id, "Инструкции недоступны")
+        return
+
+    instruction = get_instruction(platform)
+
+    bot.send_message(
+        telegram_id,
+        instruction['troubleshoot'],
         parse_mode='Markdown'
     )
 
-    bot.answer_callback_query(call.id, "Конфигурация отправлена")
+    bot.answer_callback_query(call.id)
 
 
 @bot.callback_query_handler(func=lambda call: call.data == 'invite_copy')
@@ -773,6 +1253,23 @@ def handle_invite_copy(call):
     bot.answer_callback_query(call.id, "Ссылка скопирована", show_alert=True)
 
 
+@bot.callback_query_handler(func=lambda call: call.data == 'show_platforms')
+def handle_show_platforms(call):
+    """Показать выбор платформы для инструкций"""
+
+    telegram_id = call.message.chat.id
+
+    bot.send_message(
+        telegram_id,
+        "📱 *Выберите вашу платформу*\n\n"
+        "Мы покажем пошаговую инструкцию для подключения:",
+        parse_mode='Markdown',
+        reply_markup=platform_inline_keyboard()
+    )
+
+    bot.answer_callback_query(call.id)
+
+
 @bot.callback_query_handler(func=lambda call: call.data.startswith('support_'))
 def handle_support_callbacks(call):
     """Обработка кнопок поддержки"""
@@ -780,7 +1277,6 @@ def handle_support_callbacks(call):
     action = call.data.split('_')[1]
 
     responses = {
-        'guide': "📱 *Как подключить?*\n\n1. Нажмите 'Получить ключ'\n2. Выберите протокол (VLESS-Reality)\n3. Скачайте клиент: V2Ray/Xray/Qv2ray\n4. Импортируйте конфиг\n5. Подключитесь",
         'speed': "🐌 *Медленная скорость?*\n\nПопробуйте:\n1. Сменить протокол на Hysteria2\n2. Проверить свой интернет\n3. Подключиться к другому серверу",
         'troubleshoot': "🔧 *Не работает?*\n\nПроверьте:\n1. Срок действия подписки\n2. Лимит трафика\n3. Правильность импорта конфига\n\nЕсли ничего не помогает — напишите админу."
     }
