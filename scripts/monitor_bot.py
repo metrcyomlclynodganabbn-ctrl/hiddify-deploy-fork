@@ -55,11 +55,11 @@ try:
     )
     # v4.0: Новые модули (дополнительно)
     try:
-        from v4_handlers import register_all_v4_handlers, init_v4_modules
+        from scripts.v4_handlers import register_all_v4_handlers, init_v4_modules
         V4_AVAILABLE = True
-    except ImportError:
+    except ImportError as e:
         V4_AVAILABLE = False
-        logger.info("v4.0 модули не доступны")
+        logger.info(f"v4.0 модули не доступны: {e}")
 except ImportError:
     print("⚠️  Модули v2.1 не найдены, использую базовую функциональность")
     generate_vless_url = None

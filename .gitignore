@@ -53,3 +53,13 @@ dmypy.json
 # Other
 .bandit/
 
+
+# Ситуативные отчёты (генерируются Claude Code)
+*_REPORT.md
+*_COMPLETE_REPORT.md
+output/*.md
+!output/.gitkeep
+
+# Секреты
+output/VPS_CREDENTIALS.md
+.env.local
