@@ -52,7 +52,7 @@ Telegram-бот для управления VPN-сервисом на базе H
       base.py          — engine + session maker
       crud.py          — CRUD операции
     services/          — Business logic
-      hiddify_client.py — Async Hiddify API ✅
+      hiddify_client.py — Async Hiddify API ✅ (VLESS Reality only)
 
     # СТАРАЯ — Telebot (сохранена для совместимости)
     scripts/

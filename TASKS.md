@@ -26,23 +26,42 @@
 
 - [x] **ЭТАП 4.1: Aiogram 3 архитектура - entry point**
   - `bot/main.py` — точка входа с middleware pipeline
-  - `bot/middlewares/db_middleware.py` — AsyncSession инъекция
-  - `bot/middlewares/user_middleware.py` — get_or_create_user, проверка is_blocked
+  - `bot/middlewares/db_middleware.py` — AsyncSession инъекция (stub)
+  - `bot/middlewares/user_middleware.py` — get_or_create_user, проверка is_blocked (stub)
   - `bot/handlers/user_handlers.py` — заглушки (/start, /help, /cancel, /profile)
   - `bot/handlers/admin_handlers.py` — заглушка (/admin с проверкой admin_ids)
   - `config/logging_config.py` — console + file логирование
   - Commit: `15b3143` — "feat: ЭТАП 3+4.1 complete - async Hiddify client + aiogram3 entry point"
 
+- [x] **ЭТАП 4.2: Middleware + FSM states + Keyboards**
+  - `bot/middlewares/db_middleware.py` — full implementation (commit/rollback)
+  - `bot/middlewares/user_middleware.py` — full implementation (rate limiting 20/min, 100/hour)
+  - `bot/filters/admin_filter.py` — IsAdmin, IsAdminUser filters
+  - `bot/states/user_states.py` — 10 FSM State groups (108 lines)
+  - `bot/keyboards/user_keyboards.py` — 22 keyboard functions (VLESS only, removed Hysteria2/SS2022)
+  - Commit: `df30dc6` — "feat: ЭТАП 4.2-5.1 complete"
+
+- [x] **ЭТАП 5.1: /start handler**
+  - Full /start implementation with invite codes (v3.x legacy)
+  - Full /start implementation with referrals (v4.0)
+  - Admin panel check
+  - Block/expiry checks
+  - /help, /cancel, /profile handlers
+  - VLESS Reality only (removed Hysteria2/SS2022)
+  - Commit: `df30dc6` — "feat: ЭТАП 4.2-5.1 complete"
+
 ### ⏳ Следующий шаг
 
-- [ ] **ЭТАП 4.2: Middleware + FSM states**
-  - Полная реализация middlewares (добавить rate limiting, activity cache)
-  - `bot/states/user_states.py` — FSM состояния для всех user flows
-  - UserStates, CreateUserStates, PaymentStates, SupportStates, TrialStates
+- [ ] **ЭТАП 5.2: Other user handlers**
+  - "Мои устройства" handler (get connections from Hiddify API)
+  - "Получить ключ" handler (protocol selection, platform selection)
+  - "Моя подписка" handler (status, trial activation)
+  - "Поддержка" handler (create ticket FSM flow)
+  - "Пригласить друга" handler (referral link and stats)
 
 ### 🔜 Планируется
 
-- [ ] **ЭТАП 5: Перенос handlers**
+- [ ] **ЭТАП 6: Service Layer**
 
 - [ ] **ЭТАП 5+: Перенос handlers**
   - User handlers (start, cancel, devices, get key, subscription, support)
