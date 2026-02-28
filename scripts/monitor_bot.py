@@ -145,6 +145,19 @@ def validate_username(username: str) -> tuple[bool, str]:
     if not all(c.isalnum() or c in '_-' for c in username_part):
         return False, "Username содержит недопустимые символы"
 
+
+def escape_markdown(text: str) -> str:
+    """Экранировать спецсимволы Markdown для Telegram
+
+    Args:
+        text: Исходный текст
+
+    Returns:
+        Текст с экранированными спецсимволами
+    """
+    escape_chars = r'_*[]()~`>#+-=|{}.!'
+    return ''.join(f'\\{char}' if char in escape_chars else char for char in text)
+
     return True, ""
 
 
@@ -1447,7 +1460,7 @@ def handle_confirm_create_user(call):
             bot.answer_callback_query(call.id, "Пользователь уже существует", show_alert=True)
             bot.send_message(
                 telegram_id,
-                f"⚠️ Пользователь {username} уже существует в системе.",
+                f"⚠️ Пользователь {escape_markdown(username)} уже существует в системе.",
                 parse_mode='Markdown',
                 reply_markup=admin_main_keyboard()
             )
@@ -1510,7 +1523,7 @@ def handle_confirm_create_user(call):
         bot.answer_callback_query(call.id, "Пользователь создан")
 
         result_message = (
-            f"✅ *Пользователь {username} создан!*\n\n"
+            f"✅ *Пользователь {escape_markdown(username)} создан!*\n\n"
             f"📦 Лимит: {data_limit} GB\n"
             f"📅 Срок: {expire_days} дней\n"
             f"🔑 UUID: `{vless_uuid[:8]}...{vless_uuid[-4:]}`\n\n"
