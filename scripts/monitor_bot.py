@@ -40,15 +40,15 @@ from dotenv import load_dotenv
 
 # Локальные модули
 try:
-    from vless_utils import generate_vless_url, validate_vless_url
-    from platform_instructions import get_instruction, get_platform_list
-    from qr_generator import generate_qr_code
-    from hiddify_api import (
+    from scripts.vless_utils import generate_vless_url, validate_vless_url
+    from scripts.platform_instructions import get_instruction, get_platform_list
+    from scripts.qr_generator import generate_qr_code
+    from scripts.hiddify_api import (
         HiddifyAPI, HiddifyAPIError,
         validate_invite_code, use_invite_code, create_invite_code
     )
     # v3.1: Система ролей
-    from roles import (
+    from scripts.roles import (
         Role, get_user_role, is_admin as check_is_admin,
         is_manager, can_invite_users, set_user_role,
         get_role_display_name
