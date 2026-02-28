@@ -18,19 +18,31 @@
   - `database/base.py` — async engine + session maker + init_db + 27 индексов
   - `database/crud.py` — 33 async CRUD функции (user, subscription, payment, support, referral, invite)
 
+- [x] **ЭТАП 3: Async Hiddify API клиент**
+  - `services/hiddify_client.py` — httpx async wrapper, 336 строк
+  - AsyncHiddifyAPI класс с методами: create_user, get_users, update_user, delete_user, get_stats
+  - Глобальный экземпляр: get_hiddify_client()
+  - Commit: `15b3143` — "feat: ЭТАП 3+4.1 complete - async Hiddify client + aiogram3 entry point"
+
+- [x] **ЭТАП 4.1: Aiogram 3 архитектура - entry point**
+  - `bot/main.py` — точка входа с middleware pipeline
+  - `bot/middlewares/db_middleware.py` — AsyncSession инъекция
+  - `bot/middlewares/user_middleware.py` — get_or_create_user, проверка is_blocked
+  - `bot/handlers/user_handlers.py` — заглушки (/start, /help, /cancel, /profile)
+  - `bot/handlers/admin_handlers.py` — заглушка (/admin с проверкой admin_ids)
+  - `config/logging_config.py` — console + file логирование
+  - Commit: `15b3143` — "feat: ЭТАП 3+4.1 complete - async Hiddify client + aiogram3 entry point"
+
 ### ⏳ Следующий шаг
 
-- [ ] **ЭТАП 3: Async Hiddify API клиент**
-  - Создать `services/hiddify_client.py`
-  - Переделать `scripts/hiddify_api.py` в async с httpx
-  - Методы: create_user, get_users, get_user, update_user, delete_user, get_user_connections, get_stats
+- [ ] **ЭТАП 4.2: Middleware + FSM states**
+  - Полная реализация middlewares (добавить rate limiting, activity cache)
+  - `bot/states/user_states.py` — FSM состояния для всех user flows
+  - UserStates, CreateUserStates, PaymentStates, SupportStates, TrialStates
 
 ### 🔜 Планируется
 
-- [ ] **ЭТАП 4: Aiogram 3 архитектура**
-  - `bot/main.py` — точка входа
-  - `bot/middlewares/` — DatabaseMiddleware, UserMiddleware
-  - `bot/states/user_states.py` — FSM состояния
+- [ ] **ЭТАП 5: Перенос handlers**
 
 - [ ] **ЭТАП 5+: Перенос handlers**
   - User handlers (start, cancel, devices, get key, subscription, support)

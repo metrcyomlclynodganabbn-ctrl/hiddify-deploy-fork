@@ -17,10 +17,19 @@ Telegram-бот для управления VPN-сервисом на базе H
   - `database/models.py` — 7 моделей (User, Subscription, Payment, SupportTicket, TicketMessage, Referral, Invite)
   - `database/base.py` — async engine + session maker + init_db
   - `database/crud.py` — 33 async CRUD функции
-- ⏳ ЭТАП 3: Async Hiddify API клиент (next)
-  - `services/hiddify_client.py` — httpx async wrapper
-- ⏳ ЭТАП 4: Aiogram 3 архитектура
-  - `bot/main.py`, middleware, FSM states
+- ✅ ЭТАП 3: Async Hiddify API клиент (completed)
+  - `services/hiddify_client.py` — httpx async wrapper, 336 строк
+  - Методы: create_user, get_users, update_user, delete_user, get_stats
+- ✅ ЭТАП 4.1: Aiogram 3 архитектура - entry point (completed)
+  - `bot/main.py` — точка входа с middleware pipeline
+  - `bot/middlewares/db_middleware.py` — AsyncSession инъекция
+  - `bot/middlewares/user_middleware.py` — get_or_create_user, block check
+  - `bot/handlers/user_handlers.py` — заглушки (/start, /help, /cancel, /profile)
+  - `bot/handlers/admin_handlers.py` — заглушка (/admin)
+  - `config/logging_config.py` — логирование
+- ⏳ ЭТАП 4.2: Middleware + FSM states (next)
+  - Полная реализация middlewares
+  - `bot/states/user_states.py` — FSM состояния
 - ⏳ ЭТАП 5+: Перенос handlers, service layer, миграция данных
 
 **Новая точка входа** (будет после завершения):
@@ -43,7 +52,7 @@ Telegram-бот для управления VPN-сервисом на базе H
       base.py          — engine + session maker
       crud.py          — CRUD операции
     services/          — Business logic
-      hiddify_client.py — Async Hiddify API (будет)
+      hiddify_client.py — Async Hiddify API ✅
 
     # СТАРАЯ — Telebot (сохранена для совместимости)
     scripts/
