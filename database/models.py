@@ -140,13 +140,9 @@ class User(Base):
 
     # Protocol settings
     vless_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    hysteria2_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    ss2022_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
-    # VPN credentials (VLESS Reality, Hysteria2, Shadowsocks 2022)
+    # VPN credentials (VLESS Reality only)
     vless_uuid: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
-    hysteria2_password: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    ss2022_password: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     # Hiddify API integration
     hiddify_uuid: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)  # UUID from Hiddify

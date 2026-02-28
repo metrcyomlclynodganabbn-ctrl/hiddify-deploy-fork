@@ -19,7 +19,8 @@ class DatabaseMiddleware(BaseMiddleware):
     """
     Middleware to inject database session into handlers.
 
-    Creates async session for each request and injects it via data["session"].
+    Creates async session for each request and injects via data["session"].
+    Handles commit/rollback automatically.
     """
 
     async def __call__(
@@ -32,5 +33,20 @@ class DatabaseMiddleware(BaseMiddleware):
         session_maker = get_session_maker()
 
         async with session_maker() as session:
+            # Inject session
             data["session"] = session
-            return await handler(event, data)
+
+            try:
+                # Execute handler
+                result = await handler(event, data)
+
+                # Commit if handler didn't raise exception
+                await session.commit()
+
+                return result
+
+            except Exception as e:
+                # Rollback on error
+                await session.rollback()
+                logger.error(f"Database error, rolled back: {e}")
+                raise

@@ -81,10 +81,8 @@ async def create_user(
     import uuid
     import os
 
-    # Generate VPN credentials
+    # Generate VPN credentials (VLESS Reality only)
     vless_uuid = str(uuid.uuid4())
-    hysteria2_password = os.urandom(16).hex()
-    ss2022_password = os.urandom(32).hex()
 
     # Generate invite code
     invite_code = f"INV_{os.urandom(8).hex()}"
@@ -102,8 +100,6 @@ async def create_user(
         expire_days=expire_days,
         expires_at=expires_at,
         vless_uuid=vless_uuid,
-        hysteria2_password=hysteria2_password,
-        ss2022_password=ss2022_password,
         role=role,
     )
 
