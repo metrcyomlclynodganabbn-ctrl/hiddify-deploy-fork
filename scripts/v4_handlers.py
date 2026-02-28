@@ -353,7 +353,7 @@ def register_support_handlers(bot):
 
         bot.register_next_step_handler(msg, process_ticket_title)
 
-    bot.answer_callback_query(callback.id)
+        bot.answer_callback_query(callback.id)
 
 
 def process_ticket_title(message):
