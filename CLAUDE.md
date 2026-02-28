@@ -4,19 +4,52 @@
 Telegram-бот для управления VPN-сервисом на базе Hiddify/3X-UI.
 Бот: @SKRTvpnbot | Сервер: 5.45.114.73 (kodu-3xui) | SSH пароль: ~/.mcp-env
 
-## Текущая версия: v4.0.0
+## Текущая версия: v4.0.0 → v5.0.0 (в разработке)
 Задеплоена в Docker. Код в origin/main. 53 теста проходят.
 
-## ТОЧКА ВХОДА бота
-scripts/monitor_bot.py — главный файл, с него стартует контейнер.
+### 🔄 РЕФАКТОРИНГ НА AIOGRAM 3 (в разработке)
 
-## Структура
+**Статус миграции**:
+- ✅ ЭТАП 1: Фундамент и структура проекта (completed)
+  - Создана структура `bot/`, `config/`, `database/`, `services/`, `utils/`
+  - `config/settings.py` — Pydantic Settings
+- ✅ ЭТАП 2: База данных PostgreSQL + SQLAlchemy (completed)
+  - `database/models.py` — 7 моделей (User, Subscription, Payment, SupportTicket, TicketMessage, Referral, Invite)
+  - `database/base.py` — async engine + session maker + init_db
+  - `database/crud.py` — 33 async CRUD функции
+- ⏳ ЭТАП 3: Async Hiddify API клиент (next)
+  - `services/hiddify_client.py` — httpx async wrapper
+- ⏳ ЭТАП 4: Aiogram 3 архитектура
+  - `bot/main.py`, middleware, FSM states
+- ⏳ ЭТАП 5+: Перенос handlers, service layer, миграция данных
 
-    scripts/           — весь Python-код бота
-      monitor_bot.py   — точка входа
-      v4_handlers.py   — платежи, поддержка, рефералы (v4.0)
-      hiddify_api.py   — API клиент Hiddify
-      database/        — SQLAlchemy models
+**Новая точка входа** (будет после завершения):
+- Старый: `scripts/monitor_bot.py` (Telebot)
+- Новый: `bot/main.py` (Aiogram 3)
+
+## Структура (новая + старая)
+
+    # НОВАЯ — Aiogram 3 (в разработке)
+    bot/               — Aiogram 3 бот
+      main.py          — новая точка входа
+      handlers/        — роутеры с handlers
+      middlewares/     — middleware pipeline
+      keyboards/       — клавиатуры
+      states/          — FSM состояния
+    config/
+      settings.py      — Pydantic Settings
+    database/          — SQLAlchemy 2.0 async
+      models.py        — ORM модели
+      base.py          — engine + session maker
+      crud.py          — CRUD операции
+    services/          — Business logic
+      hiddify_client.py — Async Hiddify API (будет)
+
+    # СТАРАЯ — Telebot (сохранена для совместимости)
+    scripts/
+      monitor_bot.py   — точка входа (deprecated)
+      v4_handlers.py   — v4.0 handlers
+      hiddify_api.py   — sync API client (deprecated)
       payments/        — Stripe + промокоды
       support/         — тикеты поддержки
       referral/        — реферальная система

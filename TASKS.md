@@ -1,6 +1,49 @@
-# Задачи Hiddify Bot v4.0
+# Задачи Hiddify Bot
 
-## Сессия 2026-03-01
+## 🔄 РЕФАКТОРИНГ: Telebot → Aiogram 3
+
+**Начато**: 2026-03-01
+**Ветка**: `main` (планируется: `refactor/aiogram3-architecture`)
+**Референс**: VPN-SRV (`~/workspace/p-stop-projects/VPN-SRV`)
+
+### ✅ Выполнено
+
+- [x] **ЭТАП 1: Фундамент и структура проекта**
+  - Создана структура: `bot/`, `config/`, `database/`, `services/`, `utils/`
+  - `config/settings.py` — Pydantic Settings (Telegram, DB, Hiddify API, Payments, Redis)
+  - Commit: `f989399` — "feat: ЭТАП 2 complete - database layer"
+
+- [x] **ЭТАП 2: База данных PostgreSQL + SQLAlchemy**
+  - `database/models.py` — 7 моделей (User, Subscription, Payment, SupportTicket, TicketMessage, Referral, Invite)
+  - `database/base.py` — async engine + session maker + init_db + 27 индексов
+  - `database/crud.py` — 33 async CRUD функции (user, subscription, payment, support, referral, invite)
+
+### ⏳ Следующий шаг
+
+- [ ] **ЭТАП 3: Async Hiddify API клиент**
+  - Создать `services/hiddify_client.py`
+  - Переделать `scripts/hiddify_api.py` в async с httpx
+  - Методы: create_user, get_users, get_user, update_user, delete_user, get_user_connections, get_stats
+
+### 🔜 Планируется
+
+- [ ] **ЭТАП 4: Aiogram 3 архитектура**
+  - `bot/main.py` — точка входа
+  - `bot/middlewares/` — DatabaseMiddleware, UserMiddleware
+  - `bot/states/user_states.py` — FSM состояния
+
+- [ ] **ЭТАП 5+: Перенос handlers**
+  - User handlers (start, cancel, devices, get key, subscription, support)
+  - Admin handlers
+  - Payment handlers (CryptoBot/Telegram Stars вместо Stripe)
+  - Support handlers
+  - Referral handlers
+
+---
+
+## v4.0 — Старая версия (Telebot)
+
+### Сессия 2026-03-01
 
 ### Исправлено [x]
 
