@@ -31,17 +31,41 @@ scripts/monitor_bot.py — главный файл, с него стартует
     docs/              — BOT_UI_SPEC.md, DEPLOYMENT_v4.md
     configs/           — JSON/YAML конфиги протоколов
 
-## Статус на 2026-03-01
-- postgres: healthy
-- redis: healthy
-- telegram-bot: работает, но падает в handle_confirm_create_user —
-  незакрытый Markdown-тег в bot.send_message() (~строка 1537 monitor_bot.py)
+## Статус на 2026-03-01 (обновлено)
 
-## Что НЕ работает — чинить в первую очередь
-1. handle_confirm_create_user в monitor_bot.py (~строка 1537) —
-   Telegram API 400: незакрытый Markdown-тег в тексте сообщения
-2. aiohttp health endpoint (порт 8080) — не запущен
-3. GRAFANA_ADMIN_PASSWORD не задан в .env на сервере
+### Контейнеры
+- ✅ postgres: healthy (Up 47+ hours)
+- ✅ redis: healthy (Up 47+ hours)
+- ✅ telegram-bot: работает, v4.0 модули загружены
+- ✅ prometheus: работает (порт 9091)
+- ✅ grafana: работает (порт 3000)
+
+### v4.0 модули
+- ✅ Redis клиент: подключен
+- ✅ Stripe клиент: инициализирован (WARNING: STRIPE_SECRET_KEY не установлен)
+- ✅ Prometheus metrics: запущен на порту 9090
+- ⚠️ Health check endpoint: запущен на порту 8080, но не отвечает на запросы
+- ✅ Payment handlers: зарегистрированы
+- ✅ Support handlers: зарегистрированы
+- ✅ Referral handlers: зарегистрированы
+- ✅ Config builders: зарегистрированы
+
+### Последние исправления (2026-03-01)
+1. ✅ Исправлен незакрытый Markdown-тег в handle_confirm_create_user
+   - Добавлена функция escape_markdown() для экранирования спецсимволов
+   - username теперь экранируется перед вставкой в Markdown
+2. ✅ Исправлены импорты для Docker-контейнера
+   - Все локальные модули теперь импортируются с префиксом 'scripts.'
+   - v4.0 модули успешно загружаются в контейнере
+3. ✅ Исправлен отступ в v4_handlers.py
+   - bot.answer_callback_query(callback.id) перемещён внутрь функции
+
+### Известные проблемы
+1. ⚠️ Health check endpoint (порт 8080): запущен, но не отвечает на HTTP-запросы
+   - Логи показывают: "Health check endpoint запущен на порту 8080"
+   - curl http://localhost:8080/health — timeout
+   - Возможно, aiohttp сервер не корректно инициализирован в асинхронном режиме
+2. ⚠️ GRAFANA_ADMIN_PASSWORD не задан в .env на сервере (warning при docker-compose)
 
 ## Команды для работы с сервером
 
