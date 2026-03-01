@@ -239,8 +239,6 @@ async def cmd_cancel(message: Message, state):
 @user_router.message(Command("profile"))
 async def cmd_profile(message: Message, user: User):
     """Handle /profile command."""
-    from datetime import datetime
-
     # Calculate subscription status
     status = "✅ Активен"
     if user.expires_at:
@@ -482,8 +480,6 @@ async def callback_trial_confirmed(callback: CallbackQuery, state, user: User, s
         return
 
     # Activate trial
-    from datetime import timedelta
-
     trial_days = 7
     trial_limit_gb = 5
 

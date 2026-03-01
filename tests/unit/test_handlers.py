@@ -19,8 +19,9 @@ from aiogram.types import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.handlers.user_handlers import cmd_start, callback_plan_selected
+from bot.handlers.user_handlers import cmd_start
 from bot.handlers.payment_handlers import (
+    callback_plan_selected,
     callback_pay_cryptobot,
     on_successful_payment,
     message_promo_code,

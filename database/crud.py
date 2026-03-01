@@ -669,7 +669,6 @@ async def create_promo_code(
 ) -> "PromoCode":
     """Create new promo code."""
     from database.models import PromoCode, PromoCodeType
-    from datetime import timedelta
 
     # Convert string type to enum
     if isinstance(promo_type, str):

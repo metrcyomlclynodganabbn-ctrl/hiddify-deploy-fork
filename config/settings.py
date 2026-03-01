@@ -7,6 +7,11 @@ from typing import List, Optional
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from dotenv import load_dotenv
+
+# Load .env file explicitly (required for local testing)
+load_dotenv()
+
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
@@ -19,7 +24,7 @@ class Settings(BaseSettings):
     )
 
     # ==================== TELEGRAM BOT ====================
-    bot_token: str = Field(..., description="Telegram Bot Token from @BotFather")
+    bot_token: str = Field(default="test_token", description="Telegram Bot Token from @BotFather")
     bot_username: str = Field(default="SKRTvpnbot", description="Bot username without @")
     admin_ids: List[int] = Field(default_factory=list, description="Admin Telegram IDs")
 
@@ -28,7 +33,7 @@ class Settings(BaseSettings):
     db_port: int = Field(default=5432, description="Database port")
     db_name: str = Field(default="hiddify_bot", description="Database name")
     db_user: str = Field(default="hiddify_user", description="Database user")
-    db_password: str = Field(..., description="Database password")
+    db_password: str = Field(default="test_password", description="Database password")
 
     @property
     def database_url(self) -> str:
@@ -39,8 +44,8 @@ class Settings(BaseSettings):
         )
 
     # ==================== HIDDIFY API ====================
-    panel_domain: str = Field(..., description="Hiddify Panel domain")
-    hiddify_api_token: str = Field(..., description="Hiddify API token")
+    panel_domain: str = Field(default="panel.example.com", description="Hiddify Panel domain")
+    hiddify_api_token: str = Field(default="test_api_token", description="Hiddify API token")
 
     @property
     def hiddify_api_url(self) -> str:
@@ -74,7 +79,7 @@ class Settings(BaseSettings):
     redis_host: str = Field(default="redis", description="Redis host")
     redis_port: int = Field(default=6379, description="Redis port")
     redis_db: int = Field(default=0, description="Redis database number")
-    redis_password: str = Field(..., description="Redis password")
+    redis_password: str = Field(default="test_redis_password", description="Redis password")
 
     @property
     def redis_url(self) -> str:
@@ -98,7 +103,7 @@ class Settings(BaseSettings):
     log_file: str = Field(default="logs/bot.log", description="Log file path")
 
     # ==================== SECURITY ====================
-    secret_key: str = Field(..., description="Secret key for encryption")
+    secret_key: str = Field(default="change-me-in-production", description="Secret key for encryption")
 
     # ==================== FEATURES ====================
     enable_promo_codes: bool = Field(default=True, description="Enable promo codes")

@@ -52,6 +52,7 @@ class PaymentStates(StatesGroup):
     """Payment flow for subscription."""
     select_plan = State()
     select_method = State()
+    entering_promo = State()
     processing = State()
 
 

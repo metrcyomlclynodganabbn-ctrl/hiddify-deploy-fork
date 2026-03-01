@@ -3,7 +3,7 @@ SQLAlchemy models for Hiddify Bot.
 Based on existing SQLite schema with enhancements for v4.0 features.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from enum import Enum as PyEnum
 from typing import Optional
