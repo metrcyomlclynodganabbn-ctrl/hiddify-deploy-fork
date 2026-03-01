@@ -24,13 +24,26 @@ Telegram-бот для управления VPN-сервисом на базе H
   - `bot/main.py` — точка входа с middleware pipeline
   - `bot/middlewares/db_middleware.py` — AsyncSession инъекция
   - `bot/middlewares/user_middleware.py` — get_or_create_user, block check
-  - `bot/handlers/user_handlers.py` — заглушки (/start, /help, /cancel, /profile)
-  - `bot/handlers/admin_handlers.py` — заглушка (/admin)
-  - `config/logging_config.py` — логирование
-- ⏳ ЭТАП 4.2: Middleware + FSM states (next)
+- ✅ ЭТАП 4.2: Middleware + FSM states + Keyboards (completed)
   - Полная реализация middlewares
-  - `bot/states/user_states.py` — FSM состояния
-- ⏳ ЭТАП 5+: Перенос handlers, service layer, миграция данных
+  - `bot/states/user_states.py` — 10 FSM State groups (108 lines)
+  - `bot/keyboards/user_keyboards.py` — 22 keyboard functions (VLESS only)
+  - `bot/filters/admin_filter.py` — IsAdmin, IsAdminUser filters
+- ✅ ЭТАП 5.1: /start handler (completed)
+  - Full /start implementation with invite codes and referrals
+  - /help, /cancel, /profile handlers
+- ✅ ЭТАП 5.2: Other user handlers (completed)
+  - "Мои устройства" handler (handle_my_devices) - show active connections from Hiddify API
+  - "Получить ключ" handler (handle_get_key + callbacks) - protocol selection (VLESS Reality only), platform selection
+  - "Моя подписка" handler (handle_my_subscription + callbacks) - subscription status, trial activation (7 days, 5 GB)
+  - "Поддержка" handler (handle_support + FSM callbacks) - ticket creation flow with TicketStates
+  - "Пригласить друга" handler (handle_invite_friend + callbacks) - referral link and stats
+- ⏳ ЭТАП 5.3: Admin handlers (next)
+  - User management (list, extend subscription, set limit, block/unblock)
+  - Statistics dashboard
+  - Invite code management
+  - Support tickets management
+  - Broadcast system
 
 **Новая точка входа** (будет после завершения):
 - Старый: `scripts/monitor_bot.py` (Telebot)

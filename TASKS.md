@@ -50,14 +50,23 @@
   - VLESS Reality only (removed Hysteria2/SS2022)
   - Commit: `df30dc6` — "feat: ЭТАП 4.2-5.1 complete"
 
+- [x] **ЭТАП 5.2: Other user handlers**
+  - "Мои устройства" handler (handle_my_devices) - show active connections from Hiddify API
+  - "Получить ключ" handler (handle_get_key + callbacks) - protocol selection (VLESS Reality only), platform selection
+  - "Моя подписка" handler (handle_my_subscription + callbacks) - subscription status, trial activation (7 days, 5 GB)
+  - "Поддержка" handler (handle_support + FSM callbacks) - ticket creation flow with TicketStates
+  - "Пригласить друга" handler (handle_invite_friend + callbacks) - referral link and stats
+  - FSM states integration (GetKeyStates, TrialStates, TicketStates, ReferralStates)
+  - Commit: `51378a1` — "feat: ЭТАП 5.2 complete - other user handlers"
+
 ### ⏳ Следующий шаг
 
-- [ ] **ЭТАП 5.2: Other user handlers**
-  - "Мои устройства" handler (get connections from Hiddify API)
-  - "Получить ключ" handler (protocol selection, platform selection)
-  - "Моя подписка" handler (status, trial activation)
-  - "Поддержка" handler (create ticket FSM flow)
-  - "Пригласить друга" handler (referral link and stats)
+- [ ] **ЭТАП 5.3: Admin handlers**
+  - User management (list, extend subscription, set limit, block/unblock)
+  - Statistics dashboard
+  - Invite code management (create, list, stats)
+  - Support tickets management
+  - Broadcast system
 
 ### 🔜 Планируется
 
@@ -151,6 +160,7 @@
 ## Статус коммитов
 
 ```
+51378a1 [feat] ЭТАП 5.2 complete - other user handlers
 70c5981 [fix] Fix callback indentation in handle_ticket_category
 c8af5ff [fix] Fix imports for Docker container - add scripts. prefix
 2d31cba [fix] Escape Markdown special chars in username
