@@ -4,7 +4,7 @@ Contains all admin-only command and callback handlers.
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List
 from aiogram import Router, F
 from aiogram.filters import Command
@@ -232,7 +232,7 @@ async def callback_user_info(callback: CallbackQuery, session: AsyncSession):
     # Days left
     days_left = "∞"
     if user.expires_at:
-        days_left = max(0, (user.expires_at - datetime.now()).days)
+        days_left = max(0, (user.expires_at - datetime.now(timezone.utc)).days)
 
     info = (
         f"👤 <b>Информация о пользователе</b>\n\n"
@@ -275,7 +275,7 @@ async def callback_user_extend(callback: CallbackQuery, session: AsyncSession):
     if user.expires_at:
         user.expires_at += timedelta(days=30)
     else:
-        user.expires_at = datetime.now() + timedelta(days=30)
+        user.expires_at = datetime.now(timezone.utc) + timedelta(days=30)
 
     await session.commit()
 
@@ -462,7 +462,7 @@ async def handle_admin_stats(message: Message, session: AsyncSession):
             f"Месяц: {month_traffic}\n\n"
         )
 
-    response += f"📅 Дата: {datetime.now().strftime('%d.%m.%Y %H:%M')}"
+    response += f"📅 Дата: {datetime.now(timezone.utc).strftime('%d.%m.%Y %H:%M')}"
 
     await message.answer(response, parse_mode="HTML")
 

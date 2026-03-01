@@ -45,7 +45,7 @@ echo "-------------------------------------"
 
 ssh_exec << 'EOF'
 cd $SERVER_PATH
-TIMESTAMP=\$(date +%Y%m%d_%H%M%S)
+TIMESTAMP=`date +%Y%m%d_%H%M%S`
 BACKUP_FILE="backups/hiddify_bot_\${TIMESTAMP}.sql"
 
 mkdir -p backups

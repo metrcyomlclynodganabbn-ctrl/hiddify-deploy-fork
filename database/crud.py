@@ -4,7 +4,7 @@ All functions are async and use SQLAlchemy 2.0.
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import List, Optional
 
@@ -88,7 +88,7 @@ async def create_user(
     invite_code = f"INV_{os.urandom(8).hex()}"
 
     # Calculate expiry
-    expires_at = datetime.now() + timedelta(days=expire_days) if expire_days else None
+    expires_at = datetime.now(timezone.utc) + timedelta(days=expire_days) if expire_days else None
 
     user = User(
         telegram_id=telegram_id,
@@ -147,7 +147,7 @@ async def update_user_activity(
     user: User,
 ) -> User:
     """Update user last_activity timestamp."""
-    user.updated_at = datetime.now()
+    user.updated_at = datetime.now(timezone.utc)
     await session.commit()
     return user
 
@@ -248,7 +248,7 @@ async def create_subscription(
     auto_renew: bool = False,
 ) -> Subscription:
     """Create new subscription."""
-    expires_at = datetime.now() + timedelta(days=duration_days)
+    expires_at = datetime.now(timezone.utc) + timedelta(days=duration_days)
 
     subscription = Subscription(
         user_id=user_id,
@@ -320,7 +320,7 @@ async def update_payment_status(
     if payment:
         payment.status = status
         if status == PaymentStatus.COMPLETED:
-            payment.completed_at = datetime.now()
+            payment.completed_at = datetime.now(timezone.utc)
         await session.commit()
         await session.refresh(payment)
     return payment
@@ -422,7 +422,7 @@ async def update_ticket_status(
     if ticket:
         ticket.status = status
         if status == TicketStatus.RESOLVED:
-            ticket.resolved_at = datetime.now()
+            ticket.resolved_at = datetime.now(timezone.utc)
         await session.commit()
         await session.refresh(ticket)
     return ticket
@@ -555,7 +555,7 @@ async def activate_referral(
     if referral:
         referral.status = ReferralStatus.ACTIVE
         referral.payment_id = payment_id
-        referral.activated_at = datetime.now()
+        referral.activated_at = datetime.now(timezone.utc)
         await session.commit()
         await session.refresh(referral)
     return referral
@@ -599,7 +599,7 @@ async def validate_invite_code(
         return None
 
     # Check expiration
-    if invite.expires_at and invite.expires_at < datetime.now():
+    if invite.expires_at and invite.expires_at < datetime.now(timezone.utc):
         return None
 
     # Check usage limit
@@ -678,7 +678,7 @@ async def create_promo_code(
     # Calculate expiration
     expires_at = None
     if expires_days:
-        expires_at = datetime.now() + timedelta(days=expires_days)
+        expires_at = datetime.now(timezone.utc) + timedelta(days=expires_days)
 
     promo = PromoCode(
         code=code.upper(),
@@ -720,7 +720,7 @@ async def validate_promo_code(
         return False, "Промокод не найден", None
 
     # Check expiration
-    if promo.expires_at and datetime.now() > promo.expires_at:
+    if promo.expires_at and datetime.now(timezone.utc) > promo.expires_at:
         return False, "Промокод истёк", None
 
     # Check usage limit

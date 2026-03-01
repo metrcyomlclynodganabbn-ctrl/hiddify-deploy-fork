@@ -5,7 +5,7 @@ Contains all user-facing command and callback handlers.
 
 import logging
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from aiogram import Router, F
 from aiogram.filters import Command
@@ -94,7 +94,7 @@ async def cmd_start(message: Message, session: AsyncSession, user: User):
         return
 
     # Check subscription expiry
-    if user.expires_at and user.expires_at < datetime.now():
+    if user.expires_at and user.expires_at < datetime.now(timezone.utc):
         await message.answer(
             "⚠️ <b>Ваша подписка истекла</b>\n\n"
             "Обратитесь к администратору для продления.",
@@ -118,7 +118,7 @@ async def cmd_start(message: Message, session: AsyncSession, user: User):
         f"Добро пожаловать! Ваш статус: ✅ Активен",
         parse_mode="HTML",
         reply_markup=get_user_main_keyboard(
-            has_subscription=bool(user.expires_at and user.expires_at > datetime.now()),
+            has_subscription=bool(user.expires_at and user.expires_at > datetime.now(timezone.utc)),
             trial_available=not user.trial_activated,
             show_referral=True,
         )
@@ -244,10 +244,10 @@ async def cmd_profile(message: Message, user: User):
     # Calculate subscription status
     status = "✅ Активен"
     if user.expires_at:
-        if user.expires_at < datetime.now():
+        if user.expires_at < datetime.now(timezone.utc):
             status = "⚠️ Истекла"
         else:
-            days_left = (user.expires_at - datetime.now()).days
+            days_left = (user.expires_at - datetime.now(timezone.utc)).days
             status = f"✅ Активен ({days_left} дн. осталось)"
 
     # Calculate usage
@@ -406,7 +406,7 @@ async def handle_my_subscription(message: Message, user: User, session: AsyncSes
     telegram_id = message.from_user.id
 
     # Check if user has active subscription
-    has_subscription = user.expires_at and user.expires_at > datetime.now()
+    has_subscription = user.expires_at and user.expires_at > datetime.now(timezone.utc)
 
     if not has_subscription:
         # No active subscription - show trial or buy options
@@ -431,7 +431,7 @@ async def handle_my_subscription(message: Message, user: User, session: AsyncSes
         return
 
     # Calculate days left
-    days_left = (user.expires_at - datetime.now()).days
+    days_left = (user.expires_at - datetime.now(timezone.utc)).days
 
     # Calculate usage
     used_gb = user.used_bytes / (1024**3)
@@ -489,7 +489,7 @@ async def callback_trial_confirmed(callback: CallbackQuery, state, user: User, s
 
     user.trial_activated = True
     user.is_trial = True
-    user.expires_at = datetime.now() + timedelta(days=trial_days)
+    user.expires_at = datetime.now(timezone.utc) + timedelta(days=trial_days)
     user.data_limit_bytes = trial_limit_gb * 1024**3
     user.used_bytes = 0
 

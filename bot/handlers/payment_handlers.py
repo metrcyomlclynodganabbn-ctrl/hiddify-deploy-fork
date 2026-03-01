@@ -6,7 +6,7 @@ CryptoBot integration (USDT/TON) with invoice creation and webhook handling.
 import logging
 import hmac
 import hashlib
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Optional
 from aiogram import Router, F
@@ -311,7 +311,7 @@ async def callback_check_payment(callback: CallbackQuery, session: AsyncSession,
                     if status == "paid":
                         # Process successful payment
                         payment.status = PaymentStatus.COMPLETED
-                        payment.completed_at = datetime.now()
+                        payment.completed_at = datetime.now(timezone.utc)
                         await session.commit()
 
                         # Activate subscription
@@ -345,7 +345,7 @@ async def callback_check_payment(callback: CallbackQuery, session: AsyncSession,
 async def _activate_subscription(session: AsyncSession, user: User, payment: Payment):
     """Activate subscription after successful payment."""
     # Calculate new expiry date
-    base_date = user.expires_at if user.expires_at and user.expires_at > datetime.now() else datetime.now()
+    base_date = user.expires_at if user.expires_at and user.expires_at > datetime.now(timezone.utc) else datetime.now(timezone.utc)
     new_expiry = base_date + timedelta(days=payment.duration_days)
 
     # Update user
@@ -418,7 +418,7 @@ async def process_cryptobot_webhook(payload: dict, signature: str) -> dict:
             # Update payment status
             if status == "paid" and payment.status == PaymentStatus.PENDING:
                 payment.status = PaymentStatus.COMPLETED
-                payment.completed_at = datetime.now()
+                payment.completed_at = datetime.now(timezone.utc)
 
                 # Get user and activate subscription
                 user = await session.get(User, payment.user_id)
@@ -511,7 +511,7 @@ async def message_promo_code(message: Message, state, session: AsyncSession, use
         trial_limit_gb = 10  # Default trial limit
 
         # Update user
-        base_date = user.expires_at if user.expires_at and user.expires_at > datetime.now() else datetime.now()
+        base_date = user.expires_at if user.expires_at and user.expires_at > datetime.now(timezone.utc) else datetime.now(timezone.utc)
         user.expires_at = base_date + timedelta(days=trial_days)
         user.is_trial = True
         user.data_limit_bytes = trial_limit_gb * 1024**3
@@ -534,7 +534,7 @@ async def message_promo_code(message: Message, state, session: AsyncSession, use
         bonus_days = int(promo.value)
 
         # Extend user subscription
-        base_date = user.expires_at if user.expires_at and user.expires_at > datetime.now() else datetime.now()
+        base_date = user.expires_at if user.expires_at and user.expires_at > datetime.now(timezone.utc) else datetime.now(timezone.utc)
         user.expires_at = base_date + timedelta(days=bonus_days)
 
         # Mark promo as used
@@ -708,7 +708,7 @@ async def on_successful_payment(message: Message, successful_payment: Successful
 
         # Update payment status
         payment.status = PaymentStatus.COMPLETED
-        payment.completed_at = datetime.now()
+        payment.completed_at = datetime.now(timezone.utc)
 
         # Get user and activate subscription
         user = await session.get(User, payment.user_id)

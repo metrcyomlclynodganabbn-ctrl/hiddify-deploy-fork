@@ -163,8 +163,8 @@ class UserMiddleware(BaseMiddleware):
             return True
 
         # Check if last update was more than 5 minutes ago
-        from datetime import datetime, timedelta
-        if datetime.now() - user.updated_at > timedelta(minutes=5):
+        from datetime import datetime, timezone, timedelta
+        if datetime.now(timezone.utc) - user.updated_at > timedelta(minutes=5):
             return True
 
         return False
