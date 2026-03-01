@@ -49,11 +49,17 @@ Telegram-бот для управления VPN-сервисом на базе H
   - Invite Management (handle_admin_invites + callbacks) - create codes, list, stats
   - Support Tickets (handle_admin_tickets) - stub for ticket management
   - Broadcast (handle_admin_broadcast) - stub for broadcast system
-- ⏳ ЭТАП 5.4: Payment handlers (next)
-  - CryptoBot integration (USDT payments)
-  - Telegram Stars integration
-  - Promo code system
-  - Payment status tracking via webhooks
+- ✅ ЭТАП 5.4.1: CryptoBot payments (completed)
+  - Payment handlers (payment_handlers.py) - plan selection, invoice creation
+  - CryptoBot API integration (createInvoice, getInvoices)
+  - Webhook server (webhook_server.py) - aiohttp on port 8081
+  - Payment status tracking (pending → completed)
+  - Subscription activation after payment
+  - Manual payment check button
+- ⏳ ЭТАП 5.4.2: Telegram Stars payments (next)
+  - Telegram Stars integration (sendInvoice API)
+  - Pre-checkout query handling
+  - Successful payment processing
 
 **Новая точка входа** (будет после завершения):
 - Старый: `scripts/monitor_bot.py` (Telebot)

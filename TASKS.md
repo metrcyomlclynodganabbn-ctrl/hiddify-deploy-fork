@@ -73,13 +73,27 @@
   - FSM states (CreateUserStates, AdminUserStates, InviteStates)
   - Commit: `1e91ecb` — "feat: ЭТАП 5.3 complete - admin handlers"
 
+- [x] **ЭТАП 5.4.1: CryptoBot payments (USDT/TON)**
+  - Payment handlers (payment_handlers.py) - plan selection, invoice creation
+  - CryptoBot API integration (createInvoice, getInvoices)
+  - Webhook server (webhook_server.py) - aiohttp on port 8081
+  - Payment status tracking (pending → completed)
+  - Subscription activation after payment
+  - Manual payment check button
+  - Commit: `938ac4c` — "feat: ЭТАП 5.4.1 complete - CryptoBot payments"
+
 ### ⏳ Следующий шаг
 
-- [ ] **ЭТАП 5.4: Payment handlers**
-  - CryptoBot integration (USDT payments)
-  - Telegram Stars integration
-  - Promo code system
-  - Payment status tracking via webhooks
+- [ ] **ЭТАП 5.4.2: Telegram Stars payments**
+  - Telegram Stars integration (sendInvoice API)
+  - Pre-checkout query handling
+  - Successful payment processing
+  - Refund handling (if needed)
+
+- [ ] **ЭТАП 5.4.3: Promo code system**
+  - Promo code validation
+  - Discount application
+  - Promo CRUD operations
 
 ### 🔜 Планируется
 
@@ -173,6 +187,8 @@
 ## Статус коммитов
 
 ```
+938ac4c [feat] ЭТАП 5.4.1 complete - CryptoBot payments (USDT/TON)
+95bf019 [docs] Update CLAUDE.md and TASKS.md - ЭТАП 5.3 complete
 1e91ecb [feat] ЭТАП 5.3 complete - admin handlers
 5dd33df [docs] Update CLAUDE.md and TASKS.md - ЭТАП 5.2 complete
 51378a1 [feat] ЭТАП 5.2 complete - other user handlers
