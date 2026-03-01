@@ -70,7 +70,13 @@ Telegram-бот для управления VPN-сервисом на базе H
   - Handlers (input field, validation, activation)
   - Features: expiration, usage limits, one-time per user
 - ✅ ЭТАП 5.4: Payment handlers - ПОЛНОСТЬЮ ЗАВЕРШЁН!
-- ⏳ ЭТАП 5.5: Testing & deployment (next)
+- ✅ ЭТАП 6: Testing & deployment (completed)
+  - Unit tests (test_handlers.py) - /start, payments, promos, admin
+  - Dockerfile updated (bot.main entry point)
+  - docker-compose.yml updated (port 8081, env vars)
+  - Migration script SQLite → PostgreSQL (migrate_sqlite_to_postgres.py)
+- ✅ ЭТАП 4-6: Aiogram 3 Architecture - ПОЛНОСТЬЮ ЗАВЕРШЕНА!
+- ⏳ ЭТАП 7: Final deployment & monitoring (next)
 
 **Новая точка входа** (будет после завершения):
 - Старый: `scripts/monitor_bot.py` (Telebot)

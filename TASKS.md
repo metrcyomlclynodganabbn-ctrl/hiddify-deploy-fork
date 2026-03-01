@@ -99,21 +99,31 @@
   - Features: expiration, usage limits, one-time per user
   - Commit: `1a20803` — "feat: ЭТАП 5.4.3 complete - Promo code system"
 
-### ✅ ЭТАП 5.4: Payment handlers - ПОЛНОСТЬЮ ЗАВЕРШЁН!
+- [x] **ЭТАП 6: Testing & deployment**
+  - Unit tests for handlers (test_handlers.py)
+  - Dockerfile updated (bot.main entry point)
+  - docker-compose.yml updated (port 8081, env vars)
+  - Migration script SQLite → PostgreSQL
+  - Commit: `31650dc` — "feat: ЭТАП 6 complete - Testing & deployment"
 
-**Итого по платежам:**
-- ✅ CryptoBot (USDT/TON) - webhook на порту 8081
-- ✅ Telegram Stars - native payments
-- ✅ Promo codes - 4 типа (percent, fixed, trial, bonus)
-- ❌ ЮMoney - не реализован (будет позже при необходимости)
+### ✅ ЭТАП 5: User/Admin/Payment handlers - ПОЛНОСТЬЮ ЗАВЕРШЁН!
+
+**Итого по handlers:**
+- ✅ User handlers (/start, /help, /cancel, /profile, devices, get key, subscription, support, referrals)
+- ✅ Admin handlers (users, create user, extend, block, limit, statistics, invites, tickets, broadcast)
+- ✅ Payment handlers (CryptoBot, Telegram Stars, Promo codes)
+
+### ✅ ЭТАП 4-6: Aiogram 3 Architecture - ПОЛНОСТЬЮ ЗАВЕРШЕНА!
+
+**Migration to v5.0.0 is COMPLETE!**
 
 ### ⏳ Следующий шаг
 
-- [ ] **ЭТАП 5.5: Testing & deployment**
-  - Unit тесты для payment handlers
-  - Интеграционные тесты с CryptoBot API
-  - Docker compose update
-  - Environment variables documentation
+- [ ] **ЭТАП 7: Final deployment & monitoring**
+  - Deploy to production server
+  - Run migration script
+  - Monitor logs and metrics
+  - Smoke testing
 
 ### 🔜 Планируется
 
@@ -207,6 +217,8 @@
 ## Статус коммитов
 
 ```
+31650dc [feat] ЭТАП 6 complete - Testing & deployment
+c825842 [docs] Update CLAUDE.md and TASKS.md - ЭТАП 5.4.3 complete, ЭТАП 5.4 DONE
 1a20803 [feat] ЭТАП 5.4.3 complete - Promo code system
 50a45b1 [docs] Update CLAUDE.md and TASKS.md - ЭТАП 5.4.2 complete
 b326249 [feat] ЭТАП 5.4.2 complete - Telegram Stars payments
