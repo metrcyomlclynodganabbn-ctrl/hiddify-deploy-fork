@@ -80,6 +80,14 @@ class TicketPriority(PyEnum):
     URGENT = "urgent"
 
 
+class PromoCodeType(PyEnum):
+    """Promo code type."""
+    PERCENT = "percent"  # Percentage discount
+    FIXED = "fixed"  # Fixed amount discount
+    TRIAL = "trial"  # Free trial period
+    BONUS = "bonus"  # Bonus days/data
+
+
 class TicketStatus(PyEnum):
     """Support ticket status."""
     OPEN = "open"
@@ -425,3 +433,79 @@ class Invite(Base):
         server_default=func.now(),
         nullable=False
     )
+
+    # Relationships
+    creator = relationship("User", foreign_keys=[created_by])
+
+
+# ==================== PROMO CODE MODEL ====================
+
+class PromoCode(Base):
+    """
+    Promo code model for discounts and bonuses.
+
+    Types:
+    - percent: Percentage discount (e.g., 20% off)
+    - fixed: Fixed amount discount (e.g., $5 off)
+    - trial: Free trial period
+    - bonus: Bonus days or data
+    """
+    __tablename__ = "promo_codes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+
+    # Code info
+    code: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
+    promo_type: Mapped[PromoCodeType] = mapped_column(Enum(PromoCodeType), nullable=False)
+
+    # Discount value (percentage, fixed amount, or days for trial)
+    value: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+
+    # Usage limits
+    max_uses: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # null = unlimited
+    used_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    # Active status
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+    # Expiration
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Creator (admin)
+    created_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False
+    )
+
+    # Relationships
+    creator_user = relationship("User", foreign_keys=[created_by])
+    usages = relationship("PromoUsage", back_populates="promo_code", cascade="all, delete-orphan")
+
+
+class PromoUsage(Base):
+    """
+    Promo code usage tracking.
+    Records which user used which promo code and when.
+    """
+    __tablename__ = "promo_usage"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+
+    # Foreign keys
+    promo_code_id: Mapped[int] = mapped_column(ForeignKey("promo_codes.id"), nullable=False)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+
+    # Timestamp
+    used_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False
+    )
+
+    # Relationships
+    promo_code = relationship("PromoCode", back_populates="usages")
+    user = relationship("User")

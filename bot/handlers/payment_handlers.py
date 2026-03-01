@@ -23,6 +23,7 @@ from database.models import (
     PaymentStatus,
     User,
     Subscription,
+    PromoCodeType,
 )
 from bot.states.user_states import PaymentStates
 from bot.keyboards.user_keyboards import (
@@ -461,16 +462,104 @@ async def callback_pay_promo(callback: CallbackQuery, state):
 
 
 @payment_router.message(PaymentStates.entering_promo)
-async def message_promo_code(message: Message, state, session: AsyncSession):
-    """Handle promo code input."""
-    # TODO: Implement promo code validation and discount application
-    await message.answer(
-        "🎫 <b>Промокоды</b>\n\n"
-        "Функционал в разработке.\n\n"
-        "Свяжитесь с администратором для получения промокода.",
-        parse_mode=ParseMode.HTML
-    )
+async def message_promo_code(message: Message, state, session: AsyncSession, user: User):
+    """Handle promo code input and apply discount or bonus."""
+    code = message.text.strip().upper()
+
+    # Validate promo code
+    is_valid, message_text, promo = await crud.validate_promo_code(session, code, user.id)
+
+    if not is_valid:
+        await message.answer(
+            f"❌ <b>Ошибка промокода</b>\n\n"
+            f"{message_text}\n\n"
+            f"Попробуйте другой код или продолжите без промокода.",
+            parse_mode=ParseMode.HTML
+        )
+        # Don't clear state - let user try again
+        return
+
+    # Apply promo code based on type
+    from database.models import PromoCodeType
+
+    result_message = f"🎫 <b>Промокод применён!</b>\n\n"
+    result_message += f"Код: <code>{code}</code>\n\n"
+
+    if promo.promo_type == PromoCodeType.PERCENT:
+        # Save discount to state for payment
+        discount_percent = float(promo.value)
+        await state.update_data(promo_discount_percent=discount_percent)
+
+        result_message += f"✅ Скидка: {discount_percent}%\n\n"
+        result_message += "Выберите способ оплаты для применения скидки:"
+
+        keyboard = get_payment_methods_keyboard()
+
+    elif promo.promo_type == PromoCodeType.FIXED:
+        # Save fixed discount to state
+        discount_amount = float(promo.value)
+        await state.update_data(promo_discount_fixed=discount_amount)
+
+        result_message += f"✅ Скидка: ${discount_amount:.2f}\n\n"
+        result_message += "Выберите способ оплаты для применения скидки:"
+
+        keyboard = get_payment_methods_keyboard()
+
+    elif promo.promo_type == PromoCodeType.TRIAL:
+        # Activate trial immediately
+        trial_days = int(promo.value)
+        trial_limit_gb = 10  # Default trial limit
+
+        # Update user
+        base_date = user.expires_at if user.expires_at and user.expires_at > datetime.now() else datetime.now()
+        user.expires_at = base_date + timedelta(days=trial_days)
+        user.is_trial = True
+        user.data_limit_bytes = trial_limit_gb * 1024**3
+        user.used_bytes = 0
+
+        # Mark promo as used
+        await crud.use_promo_code(session, promo.id, user.id)
+        await session.commit()
+
+        result_message += f"✅ Пробный период активирован!\n\n"
+        result_message += f"📅 Длительность: {trial_days} дней\n"
+        result_message += f"📊 Лимит трафика: {trial_limit_gb} GB\n"
+        result_message += f"⏰ Истекает: {user.expires_at.strftime('%d.%m.%Y %H:%M')}\n\n"
+        result_message += "Нажмите 'Получить ключ' для подключения!"
+
+        keyboard = None  # No keyboard needed
+
+    elif promo.promo_type == PromoCodeType.BONUS:
+        # Bonus days/data - extend immediately
+        bonus_days = int(promo.value)
+
+        # Extend user subscription
+        base_date = user.expires_at if user.expires_at and user.expires_at > datetime.now() else datetime.now()
+        user.expires_at = base_date + timedelta(days=bonus_days)
+
+        # Mark promo as used
+        await crud.use_promo_code(session, promo.id, user.id)
+        await session.commit()
+
+        result_message += f"✅ Бонус начислен!\n\n"
+        result_message += f"📅 +{bonus_days} дней к подписке\n"
+        result_message += f"⏰ Истекает: {user.expires_at.strftime('%d.%m.%Y %H:%M')}\n\n"
+        result_message += "Нажмите 'Получить ключ' для подключения!"
+
+        keyboard = None  # No keyboard needed
+
     await state.clear()
+
+    await message.answer(
+        result_message,
+        parse_mode=ParseMode.HTML,
+        reply_markup=keyboard
+    )
+
+    logger.info(
+        f"Promo code {code} used by user {user.id}, "
+        f"type={promo.promo_type.value}, value={promo.value}"
+    )
 
 
 # ============================================================================

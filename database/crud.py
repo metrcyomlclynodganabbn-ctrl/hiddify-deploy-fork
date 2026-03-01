@@ -654,3 +654,152 @@ async def create_invite_code(
     session.add(invite)
     await session.flush()
     return invite
+
+
+# ==================== PROMO CODE CRUD ====================
+
+async def create_promo_code(
+    session: AsyncSession,
+    code: str,
+    promo_type: str,
+    value: float,
+    max_uses: Optional[int] = None,
+    expires_days: Optional[int] = None,
+    created_by: Optional[int] = None,
+) -> "PromoCode":
+    """Create new promo code."""
+    from database.models import PromoCode, PromoCodeType
+    from datetime import timedelta
+
+    # Convert string type to enum
+    if isinstance(promo_type, str):
+        promo_type = PromoCodeType(promo_type)
+
+    # Calculate expiration
+    expires_at = None
+    if expires_days:
+        expires_at = datetime.now() + timedelta(days=expires_days)
+
+    promo = PromoCode(
+        code=code.upper(),
+        promo_type=promo_type,
+        value=Decimal(str(value)),
+        max_uses=max_uses,
+        expires_at=expires_at,
+        created_by=created_by,
+    )
+
+    session.add(promo)
+    await session.flush()
+    return promo
+
+
+async def validate_promo_code(
+    session: AsyncSession,
+    code: str,
+    user_id: Optional[int] = None,
+) -> tuple[bool, str, Optional["PromoCode"]]:
+    """
+    Validate promo code.
+
+    Returns:
+        (is_valid, message, promo_code)
+    """
+    from database.models import PromoCode, PromoUsage
+    from sqlalchemy import select
+
+    # Find promo code
+    result = await session.execute(
+        select(PromoCode)
+        .where(PromoCode.code == code.upper())
+        .where(PromoCode.is_active == True)
+    )
+    promo = result.scalar_one_or_none()
+
+    if not promo:
+        return False, "Промокод не найден", None
+
+    # Check expiration
+    if promo.expires_at and datetime.now() > promo.expires_at:
+        return False, "Промокод истёк", None
+
+    # Check usage limit
+    if promo.max_uses and promo.used_count >= promo.max_uses:
+        return False, "Промокод полностью использован", None
+
+    # Check if user already used this code
+    if user_id:
+        result = await session.execute(
+            select(PromoUsage)
+            .where(PromoUsage.promo_code_id == promo.id)
+            .where(PromoUsage.user_id == user_id)
+        )
+        if result.scalar_one_or_none():
+            return False, "Вы уже использовали этот промокод", None
+
+    return True, "Промокод действителен", promo
+
+
+async def use_promo_code(
+    session: AsyncSession,
+    promo_code_id: int,
+    user_id: int,
+) -> "PromoCode":
+    """Use promo code - record usage and increment counter."""
+    from database.models import PromoUsage
+
+    # Record usage
+    usage = PromoUsage(
+        promo_code_id=promo_code_id,
+        user_id=user_id,
+    )
+    session.add(usage)
+
+    # Increment counter
+    result = await session.execute(
+        select(PromoCode).where(PromoCode.id == promo_code_id)
+    )
+    promo = result.scalar_one_or_none()
+
+    if promo:
+        promo.used_count += 1
+
+    await session.flush()
+    return promo
+
+
+async def get_promo_code_by_code(
+    session: AsyncSession,
+    code: str,
+) -> Optional["PromoCode"]:
+    """Get promo code by code string."""
+    from database.models import PromoCode
+    from sqlalchemy import select
+
+    result = await session.execute(
+        select(PromoCode).where(PromoCode.code == code.upper())
+    )
+    return result.scalar_one_or_none()
+
+
+async def list_promo_codes(
+    session: AsyncSession,
+    active_only: bool = True,
+    created_by: Optional[int] = None,
+) -> list["PromoCode"]:
+    """List promo codes with optional filters."""
+    from database.models import PromoCode
+    from sqlalchemy import select
+
+    query = select(PromoCode)
+
+    if active_only:
+        query = query.where(PromoCode.is_active == True)
+
+    if created_by:
+        query = query.where(PromoCode.created_by == created_by)
+
+    query = query.order_by(PromoCode.created_at.desc())
+
+    result = await session.execute(query)
+    return list(result.scalars().all())
