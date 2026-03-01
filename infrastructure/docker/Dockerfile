@@ -26,5 +26,5 @@ ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONPATH="/app:$PYTHONPATH"
 
-# Запуск бота как модуль для правильного разрешения импортов
-CMD ["python", "-m", "scripts.monitor_bot"]
+# Запуск нового Aiogram 3 бота
+CMD ["python", "-m", "bot.main"]

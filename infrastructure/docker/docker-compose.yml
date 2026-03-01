@@ -54,6 +54,15 @@ services:
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-hiddify_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-hiddify_bot}
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      # Bot settings
+      - BOT_USERNAME=${BOT_USERNAME:-SKRTvpnbot}
+      # CryptoBot payments
+      - CRYPTOBOT_API_TOKEN=${CRYPTOBOT_API_TOKEN:-}
+      # Hiddify API
+      - PANEL_DOMAIN=${PANEL_DOMAIN}
+      - HIDDIFY_API_TOKEN=${HIDDIFY_API_TOKEN:-}
+      # Security
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
     depends_on:
       postgres:
         condition: service_healthy
@@ -62,6 +71,7 @@ services:
     ports:
       - "${BOT_METRICS_PORT:-9090}:9090"
       - "${BOT_HEALTH_PORT:-8080}:8080"
+      - "${WEBHOOK_PORT:-8081}:8081"
     volumes:
       - ../../data:/app/data
       - ../../logs:/app/logs
