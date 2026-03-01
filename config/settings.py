@@ -20,6 +20,7 @@ class Settings(BaseSettings):
 
     # ==================== TELEGRAM BOT ====================
     bot_token: str = Field(..., description="Telegram Bot Token from @BotFather")
+    bot_username: str = Field(default="SKRTvpnbot", description="Bot username without @")
     admin_ids: List[int] = Field(default_factory=list, description="Admin Telegram IDs")
 
     # ==================== DATABASE ====================

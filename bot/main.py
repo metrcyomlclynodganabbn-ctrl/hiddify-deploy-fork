@@ -23,13 +23,15 @@ from config.settings import settings
 from config.logging_config import setup_logging
 from database.base import init_db, close_db
 from services.hiddify_client import get_hiddify_client, close_hiddify_client
+from bot.webhook_server import start_webhook_server
 
 # Setup logging
 setup_logging()
 
-# Import routers (currently empty stubs)
-from bot.handlers.user_handlers import router as user_router
-from bot.handlers.admin_handlers import router as admin_router
+# Import routers
+from bot.handlers.user_handlers import user_router
+from bot.handlers.admin_handlers import admin_router
+from bot.handlers.payment_handlers import payment_router
 
 # Import middlewares (currently empty stubs)
 from bot.middlewares.db_middleware import DatabaseMiddleware
@@ -54,9 +56,17 @@ async def set_bot_commands(bot: Bot):
 
 # ==================== SHUTDOWN ====================
 
-async def shutdown(dispatcher: Dispatcher, bot: Bot):
+async def shutdown(dispatcher: Dispatcher, bot: Bot, webhook_runner=None):
     """Graceful shutdown."""
     logger.info("Shutting down...")
+
+    # Stop webhook server
+    if webhook_runner:
+        try:
+            await webhook_runner.cleanup()
+            logger.info("Webhook server stopped")
+        except Exception as e:
+            logger.error(f"Error stopping webhook server: {e}")
 
     # Stop dispatcher
     await dispatcher.fsm.storage.close()
@@ -108,14 +118,25 @@ async def main():
     # Register routers
     dp.include_router(user_router)
     dp.include_router(admin_router)
+    dp.include_router(payment_router)
 
     # Set bot commands
     await set_bot_commands(bot)
 
+    # Start webhook server (parallel to bot polling)
+    webhook_runner = None
+    if settings.cryptobot_api_token:
+        try:
+            logger.info("Starting webhook server...")
+            webhook_runner = await start_webhook_server(port=8081)
+            logger.info("Webhook server started on port 8081")
+        except Exception as e:
+            logger.error(f"Failed to start webhook server: {e}")
+
     # Setup signal handlers for graceful shutdown
     def signal_handler(sig, frame):
         logger.info(f"Received signal {sig}")
-        asyncio.create_task(shutdown(dp, bot))
+        asyncio.create_task(shutdown(dp, bot, webhook_runner))
         sys.exit(0)
 
     signal.signal(signal.SIGINT, signal_handler)
@@ -139,7 +160,7 @@ async def main():
     except Exception as e:
         logger.error(f"Error during polling: {e}")
     finally:
-        await shutdown(dp, bot)
+        await shutdown(dp, bot, webhook_runner)
 
 
 if __name__ == "__main__":
