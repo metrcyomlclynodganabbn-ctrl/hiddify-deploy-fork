@@ -82,13 +82,16 @@
   - Manual payment check button
   - Commit: `938ac4c` — "feat: ЭТАП 5.4.1 complete - CryptoBot payments"
 
-### ⏳ Следующий шаг
-
-- [ ] **ЭТАП 5.4.2: Telegram Stars payments**
+- [x] **ЭТАП 5.4.2: Telegram Stars payments**
   - Telegram Stars integration (sendInvoice API)
-  - Pre-checkout query handling
-  - Successful payment processing
-  - Refund handling (if needed)
+  - Pre-checkout query handler (pre_checkout_stars)
+  - Successful payment handler (on_successful_payment)
+  - Pricing: 200/700/1700 XTR (weekly/monthly/quarterly)
+  - PaymentProvider.TELEGRAM_STARS enum
+  - Idempotent processing (duplicate protection)
+  - Commit: `b326249` — "feat: ЭТАП 5.4.2 complete - Telegram Stars payments"
+
+### ⏳ Следующий шаг
 
 - [ ] **ЭТАП 5.4.3: Promo code system**
   - Promo code validation
@@ -187,6 +190,8 @@
 ## Статус коммитов
 
 ```
+b326249 [feat] ЭТАП 5.4.2 complete - Telegram Stars payments
+f387b4a [docs] Update CLAUDE.md and TASKS.md - ЭТАП 5.4.1 complete
 938ac4c [feat] ЭТАП 5.4.1 complete - CryptoBot payments (USDT/TON)
 95bf019 [docs] Update CLAUDE.md and TASKS.md - ЭТАП 5.3 complete
 1e91ecb [feat] ЭТАП 5.3 complete - admin handlers

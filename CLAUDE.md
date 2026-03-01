@@ -56,10 +56,16 @@ Telegram-бот для управления VPN-сервисом на базе H
   - Payment status tracking (pending → completed)
   - Subscription activation after payment
   - Manual payment check button
-- ⏳ ЭТАП 5.4.2: Telegram Stars payments (next)
-  - Telegram Stars integration (sendInvoice API)
-  - Pre-checkout query handling
-  - Successful payment processing
+- ✅ ЭТАП 5.4.2: Telegram Stars payments (completed)
+  - sendInvoice() API integration
+  - Pre-checkout query handler (pre_checkout_stars)
+  - Successful payment handler (on_successful_payment)
+  - Pricing: 200/700/1700 XTR (weekly/monthly/quarterly)
+  - PaymentProvider.TELEGRAM_STARS enum
+  - Idempotent processing (duplicate protection)
+- ⏳ ЭТАП 5.4.3: Promo code system (next)
+  - Promo code validation
+  - Discount application
 
 **Новая точка входа** (будет после завершения):
 - Старый: `scripts/monitor_bot.py` (Telebot)
