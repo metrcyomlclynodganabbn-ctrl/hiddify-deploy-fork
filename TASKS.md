@@ -91,12 +91,29 @@
   - Idempotent processing (duplicate protection)
   - Commit: `b326249` — "feat: ЭТАП 5.4.2 complete - Telegram Stars payments"
 
+- [x] **ЭТАП 5.4.3: Promo code system**
+  - PromoCode model (PERCENT, FIXED, TRIAL, BONUS types)
+  - PromoUsage model for tracking
+  - CRUD functions (create, validate, use, list)
+  - Handlers (input field, validation, activation)
+  - Features: expiration, usage limits, one-time per user
+  - Commit: `1a20803` — "feat: ЭТАП 5.4.3 complete - Promo code system"
+
+### ✅ ЭТАП 5.4: Payment handlers - ПОЛНОСТЬЮ ЗАВЕРШЁН!
+
+**Итого по платежам:**
+- ✅ CryptoBot (USDT/TON) - webhook на порту 8081
+- ✅ Telegram Stars - native payments
+- ✅ Promo codes - 4 типа (percent, fixed, trial, bonus)
+- ❌ ЮMoney - не реализован (будет позже при необходимости)
+
 ### ⏳ Следующий шаг
 
-- [ ] **ЭТАП 5.4.3: Promo code system**
-  - Promo code validation
-  - Discount application
-  - Promo CRUD operations
+- [ ] **ЭТАП 5.5: Testing & deployment**
+  - Unit тесты для payment handlers
+  - Интеграционные тесты с CryptoBot API
+  - Docker compose update
+  - Environment variables documentation
 
 ### 🔜 Планируется
 
@@ -190,6 +207,8 @@
 ## Статус коммитов
 
 ```
+1a20803 [feat] ЭТАП 5.4.3 complete - Promo code system
+50a45b1 [docs] Update CLAUDE.md and TASKS.md - ЭТАП 5.4.2 complete
 b326249 [feat] ЭТАП 5.4.2 complete - Telegram Stars payments
 f387b4a [docs] Update CLAUDE.md and TASKS.md - ЭТАП 5.4.1 complete
 938ac4c [feat] ЭТАП 5.4.1 complete - CryptoBot payments (USDT/TON)

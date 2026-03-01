@@ -63,9 +63,14 @@ Telegram-бот для управления VPN-сервисом на базе H
   - Pricing: 200/700/1700 XTR (weekly/monthly/quarterly)
   - PaymentProvider.TELEGRAM_STARS enum
   - Idempotent processing (duplicate protection)
-- ⏳ ЭТАП 5.4.3: Promo code system (next)
-  - Promo code validation
-  - Discount application
+- ✅ ЭТАП 5.4.3: Promo code system (completed)
+  - PromoCode model (PERCENT, FIXED, TRIAL, BONUS types)
+  - PromoUsage model for tracking
+  - CRUD functions (create, validate, use, list)
+  - Handlers (input field, validation, activation)
+  - Features: expiration, usage limits, one-time per user
+- ✅ ЭТАП 5.4: Payment handlers - ПОЛНОСТЬЮ ЗАВЕРШЁН!
+- ⏳ ЭТАП 5.5: Testing & deployment (next)
 
 **Новая точка входа** (будет после завершения):
 - Старый: `scripts/monitor_bot.py` (Telebot)
