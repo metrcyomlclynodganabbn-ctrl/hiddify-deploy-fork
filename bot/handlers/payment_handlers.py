@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Optional
 from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery, PreCheckoutQuery
+from aiogram.types import Message, CallbackQuery, PreCheckoutQuery, SuccessfulPayment
 from aiogram.enums import ParseMode
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -43,6 +43,7 @@ SUBSCRIPTION_PLANS = {
         "name": "Неделя",
         "description": "Доступ на 7 дней",
         "price_usd": 3.00,
+        "price_stars": 200,  # ~$3.00 @ 1 Star ≈ $0.015
         "duration_days": 7,
         "data_limit_gb": 10,
         "features": ["До 10 GB трафика", "7 дней доступа", "Standard скорость"],
@@ -52,6 +53,7 @@ SUBSCRIPTION_PLANS = {
         "name": "Месяц",
         "description": "Доступ на 30 дней",
         "price_usd": 10.00,
+        "price_stars": 700,  # ~$10.50 @ 1 Star ≈ $0.015
         "duration_days": 30,
         "data_limit_gb": 50,
         "features": ["До 50 GB трафика", "30 дней доступа", "Высокая скорость"],
@@ -61,6 +63,7 @@ SUBSCRIPTION_PLANS = {
         "name": "Квартал",
         "description": "Доступ на 90 дней",
         "price_usd": 25.00,
+        "price_stars": 1700,  # ~$25.50 @ 1 Star ≈ $0.015
         "duration_days": 90,
         "data_limit_gb": 200,
         "features": ["До 200 GB трафика", "90 дней доступа", "Приоритетная поддержка"],
@@ -483,17 +486,161 @@ async def callback_cancel_payment(callback: CallbackQuery, state):
 
 
 # ============================================================================
-# STARS (stub for now)
+# TELEGRAM STARS PAYMENTS
 # ============================================================================
 
 @payment_router.callback_query(F.data == "pay_stars")
-async def callback_pay_stars(callback: CallbackQuery):
-    """Handle Telegram Stars payment (stub)."""
-    await callback.message.edit_text(
-        "⭐ <b>Оплата через Telegram Stars</b>\n\n"
-        "Функционал в разработке.\n\n"
-        "Используйте CryptoBot для оплаты.",
-        parse_mode=ParseMode.HTML,
-        reply_markup=get_cancel_inline_keyboard()
+async def callback_pay_stars(callback: CallbackQuery, state, session: AsyncSession, user: User):
+    """Handle Telegram Stars payment - send invoice."""
+    data = await state.get_data()
+    plan_key = data.get('plan_key')
+    plan = SUBSCRIPTION_PLANS.get(plan_key)
+
+    if not plan:
+        await callback.answer("❌ План не найден")
+        return
+
+    # Check for pending payments
+    existing_payment = await session.execute(
+        select(Payment)
+        .where(Payment.user_id == user.id)
+        .where(Payment.provider == PaymentProvider.TELEGRAM_STARS)
+        .where(Payment.status == PaymentStatus.PENDING)
+        .order_by(Payment.created_at.desc())
+        .limit(1)
     )
-    await callback.answer()
+    existing_payment = existing_payment.scalar_one_or_none()
+
+    # Create payment record
+    payment = await crud.create_payment(
+        session=session,
+        user_id=user.id,
+        provider=PaymentProvider.TELEGRAM_STARS,
+        provider_payment_id="",  # Will be filled after invoice
+        amount=Decimal(str(plan['price_stars'])),
+        currency="XTR",
+        plan_code=plan['code'],
+        duration_days=plan['duration_days'],
+        data_limit_gb=plan['data_limit_gb'],
+    )
+    await session.commit()
+    await session.refresh(payment)
+
+    # Generate unique invoice ID
+    invoice_id = f"stars_{payment.id}_{user.telegram_id}"
+
+    try:
+        # Send invoice via Telegram Stars API
+        await callback.message.answer_invoice(
+            title=f"Подписка: {plan['name']}",
+            description=plan['description'],
+            payload=str(payment.id),  # Use our payment ID as payload
+            provider_token="",  # Empty for Telegram Stars
+            currency="XTR",
+            prices=[{
+                "label": f"{plan['name']} ({plan['duration_days']} дней)",
+                "amount": plan['price_stars'],
+            }],
+            need_name=False,
+            need_phone_number=False,
+            need_email=False,
+            need_shipping_address=False,
+            send_phone_number_to_provider=False,
+            send_email_to_provider=False,
+            is_flexible=False,
+        )
+
+        # Update payment with provider payment ID
+        payment.provider_payment_id = invoice_id
+        await session.commit()
+
+        await callback.message.delete()
+        await callback.answer("✅ Инвойс отправлен")
+
+        logger.info(
+            f"Telegram Stars invoice created: payment_id={payment.id}, "
+            f"invoice_id={invoice_id}, amount={plan['price_stars']} XTR"
+        )
+
+    except Exception as e:
+        logger.error(f"Telegram Stars invoice error: {e}")
+        await callback.message.edit_text(
+            "❌ <b>Ошибка создания платежа</b>\n\n"
+            "Попробуйте позже.",
+            parse_mode=ParseMode.HTML
+        )
+        await callback.answer()
+
+
+@payment_router.pre_checkout_query(F.data.startswith("stars_"))
+async def pre_checkout_stars(pre_checkout_query: PreCheckoutQuery, session: AsyncSession):
+    """
+    Handle pre-checkout query for Telegram Stars.
+    Called when user initiates payment.
+    """
+    try:
+        # Get payment ID from payload
+        payment_id = int(pre_checkout_query.invoice_payload)
+
+        # Verify payment exists and is pending
+        payment = await session.get(Payment, payment_id)
+        if not payment or payment.status != PaymentStatus.PENDING:
+            await pre_checkout_query.answer(ok=False, error_message="Платёж не найден или истёк")
+            return
+
+        # Approve payment
+        await pre_checkout_query.answer(ok=True)
+        logger.info(f"Pre-checkout approved: payment_id={payment_id}")
+
+    except Exception as e:
+        logger.error(f"Pre-checkout error: {e}")
+        await pre_checkout_query.answer(ok=False, error_message="Ошибка оплаты")
+
+
+@payment_router.message(F.successful_payment)
+async def on_successful_payment(message: Message, successful_payment: SuccessfulPayment, session: AsyncSession):
+    """
+    Handle successful Telegram Stars payment.
+    Called automatically after payment is completed.
+    """
+    try:
+        # Get payment ID from payload
+        payment_id = int(successful_payment.invoice_payload)
+
+        payment = await session.get(Payment, payment_id)
+        if not payment:
+            await message.answer("❌ Платёж не найден")
+            return
+
+        # Check if already processed
+        if payment.status == PaymentStatus.COMPLETED:
+            await message.answer("✅ Этот платёж уже был обработан")
+            return
+
+        # Update payment status
+        payment.status = PaymentStatus.COMPLETED
+        payment.completed_at = datetime.now()
+
+        # Get user and activate subscription
+        user = await session.get(User, payment.user_id)
+        if user:
+            await _activate_subscription(session, user, payment)
+
+        await session.commit()
+
+        await message.answer(
+            "✅ <b>Оплата прошла успешно!</b>\n\n"
+            f"Подписка активирована.\n"
+            f"Нажмите 'Получить ключ' для подключения.",
+            parse_mode=ParseMode.HTML
+        )
+
+        logger.info(
+            f"Telegram Stars payment completed: payment_id={payment_id}, "
+            f"user={user.telegram_id if user else 'unknown'}, "
+            f"amount={successful_payment.total_amount} XTR"
+        )
+
+    except Exception as e:
+        logger.error(f"Successful payment processing error: {e}")
+        await message.answer("❌ Ошибка обработки платежа")
