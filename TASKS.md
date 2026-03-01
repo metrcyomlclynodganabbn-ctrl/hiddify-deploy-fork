@@ -119,11 +119,12 @@
 
 ### ⏳ Следующий шаг
 
-- [ ] **ЭТАП 7: Final deployment & monitoring**
-  - Deploy to production server
-  - Run migration script
-  - Monitor logs and metrics
-  - Smoke testing
+- [ ] **ЭТАП 7: Production deployment & monitoring**
+  - 7.1: Deploy bot to production server
+  - 7.2: Run SQLite → PostgreSQL migration
+  - 7.3: Smoke testing with real users
+  - 7.4: Setup monitoring (Prometheus/Grafana dashboards)
+  - 7.5: Enable webhooks (CryptoBot + Telegram Stars)
 
 ### 🔜 Планируется
 
@@ -217,6 +218,8 @@
 ## Статус коммитов
 
 ```
+53e44a4 [feat] Add deployment and testing infrastructure
+b9eb193 [chore] Update requirements.txt for v5.0.0
 31650dc [feat] ЭТАП 6 complete - Testing & deployment
 c825842 [docs] Update CLAUDE.md and TASKS.md - ЭТАП 5.4.3 complete, ЭТАП 5.4 DONE
 1a20803 [feat] ЭТАП 5.4.3 complete - Promo code system

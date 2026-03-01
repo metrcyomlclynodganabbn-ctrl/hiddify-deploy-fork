@@ -4,10 +4,11 @@
 Telegram-бот для управления VPN-сервисом на базе Hiddify/3X-UI.
 Бот: @SKRTvpnbot | Сервер: 5.45.114.73 (kodu-3xui) | SSH пароль: ~/.mcp-env
 
-## Текущая версия: v4.0.0 → v5.0.0 (в разработке)
-Задеплоена в Docker. Код в origin/main. 53 теста проходят.
+## Текущая версия: v5.0.0 (готова к продакшену)
+v4.0.0 (Telebot) → v5.0.0 (Aiogram 3) миграция завершена.
+Код в origin/main. 53 теста проходят. Готова к деплою.
 
-### 🔄 РЕФАКТОРИНГ НА AIOGRAM 3 (в разработке)
+### 🔄 РЕФАКТОРИНГ НА AIOGRAM 3 — ЗАВЕРШЁН
 
 **Статус миграции**:
 - ✅ ЭТАП 1: Фундамент и структура проекта (completed)
@@ -75,22 +76,30 @@ Telegram-бот для управления VPN-сервисом на базе H
   - Dockerfile updated (bot.main entry point)
   - docker-compose.yml updated (port 8081, env vars)
   - Migration script SQLite → PostgreSQL (migrate_sqlite_to_postgres.py)
+  - Local development guide (docs/LOCAL_DEVELOPMENT.md)
+  - Deployment script (scripts/deploy-production.sh)
 - ✅ ЭТАП 4-6: Aiogram 3 Architecture - ПОЛНОСТЬЮ ЗАВЕРШЕНА!
-- ⏳ ЭТАП 7: Final deployment & monitoring (next)
+- ⏳ ЭТАП 7: Production deployment & monitoring (planned)
+  - 7.1: Deploy bot to production server (deploy-production.sh)
+  - 7.2: Run SQLite → PostgreSQL migration
+  - 7.3: Smoke testing with real users
+  - 7.4: Setup monitoring (Prometheus/Grafana dashboards)
+  - 7.5: Enable webhooks (CryptoBot + Telegram Stars)
 
-**Новая точка входа** (будет после завершения):
-- Старый: `scripts/monitor_bot.py` (Telebot)
-- Новый: `bot/main.py` (Aiogram 3)
+**Новая точка входа** (v5.0.0):
+- Старый: `scripts/monitor_bot.py` (Telebot) — deprecated
+- Новый: `bot/main.py` (Aiogram 3) — активная точка входа
 
 ## Структура (новая + старая)
 
-    # НОВАЯ — Aiogram 3 (в разработке)
+    # НОВАЯ — Aiogram 3 (v5.0.0)
     bot/               — Aiogram 3 бот
-      main.py          — новая точка входа
-      handlers/        — роутеры с handlers
-      middlewares/     — middleware pipeline
-      keyboards/       — клавиатуры
-      states/          — FSM состояния
+      main.py          — точка входа (активная)
+      handlers/        — user, admin, payment handlers
+      middlewares/     — DB, User middleware pipeline
+      keyboards/       — inline клавиатуры (VLESS)
+      states/          — FSM состояния (10 групп)
+      webhook_server.py — CryptoBot webhook (порт 8081)
     config/
       settings.py      — Pydantic Settings
     database/          — SQLAlchemy 2.0 async
@@ -98,7 +107,9 @@ Telegram-бот для управления VPN-сервисом на базе H
       base.py          — engine + session maker
       crud.py          — CRUD операции
     services/          — Business logic
-      hiddify_client.py — Async Hiddify API ✅ (VLESS Reality only)
+      hiddify_client.py — Async Hiddify API (VLESS Reality)
+    docs/               — Documentation
+      LOCAL_DEVELOPMENT.md — Local testing guide
 
     # СТАРАЯ — Telebot (сохранена для совместимости)
     scripts/
@@ -121,7 +132,15 @@ Telegram-бот для управления VPN-сервисом на базе H
 
 ## Статус на 2026-03-01 (обновлено)
 
-### Контейнеры
+### Migration v4.0 → v5.0.0
+- ✅ Все 6 этапов завершены
+- ✅ Unit tests pass (53 теста)
+- ✅ Docker конфигурация обновлена
+- ✅ Migration script готов
+- ✅ Deployment script готов
+- ⏳ Ожидается production deploy (ЭТАП 7)
+
+### Контейнеры (текущие - v4.0)
 - ✅ postgres: healthy (Up 47+ hours)
 - ✅ redis: healthy (Up 47+ hours)
 - ✅ telegram-bot: работает, v4.0 модули загружены
