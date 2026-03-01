@@ -38,12 +38,22 @@ Telegram-бот для управления VPN-сервисом на базе H
   - "Моя подписка" handler (handle_my_subscription + callbacks) - subscription status, trial activation (7 days, 5 GB)
   - "Поддержка" handler (handle_support + FSM callbacks) - ticket creation flow with TicketStates
   - "Пригласить друга" handler (handle_invite_friend + callbacks) - referral link and stats
-- ⏳ ЭТАП 5.3: Admin handlers (next)
-  - User management (list, extend subscription, set limit, block/unblock)
-  - Statistics dashboard
-  - Invite code management
-  - Support tickets management
-  - Broadcast system
+- ✅ ЭТАП 5.3: Admin handlers (completed)
+  - User management (handle_admin_users) - show users list (first 20 of 50)
+  - Create User (handle_admin_create_user + FSM) - username input, confirmation
+  - User Info (callback_user_info) - detailed user stats with keyboard
+  - Extend Subscription (callback_user_extend) - +30 days to expiry
+  - Block/Unblock (callback_user_block, callback_user_unblock) - toggle user block
+  - Set Limit (callback_user_limit + FSM) - change traffic limit
+  - Statistics (handle_admin_stats) - system stats with Hiddify API integration
+  - Invite Management (handle_admin_invites + callbacks) - create codes, list, stats
+  - Support Tickets (handle_admin_tickets) - stub for ticket management
+  - Broadcast (handle_admin_broadcast) - stub for broadcast system
+- ⏳ ЭТАП 5.4: Payment handlers (next)
+  - CryptoBot integration (USDT payments)
+  - Telegram Stars integration
+  - Promo code system
+  - Payment status tracking via webhooks
 
 **Новая точка входа** (будет после завершения):
 - Старый: `scripts/monitor_bot.py` (Telebot)

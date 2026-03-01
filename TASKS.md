@@ -59,14 +59,27 @@
   - FSM states integration (GetKeyStates, TrialStates, TicketStates, ReferralStates)
   - Commit: `51378a1` — "feat: ЭТАП 5.2 complete - other user handlers"
 
+- [x] **ЭТАП 5.3: Admin handlers**
+  - User management (handle_admin_users) - show users list (first 20 of 50)
+  - Create User (handle_admin_create_user + FSM) - username input, confirmation
+  - User Info (callback_user_info) - detailed user stats with keyboard
+  - Extend Subscription (callback_user_extend) - +30 days to expiry
+  - Block/Unblock (callback_user_block, callback_user_unblock) - toggle user block
+  - Set Limit (callback_user_limit + FSM) - change traffic limit
+  - Statistics (handle_admin_stats) - system stats with Hiddify API integration
+  - Invite Management (handle_admin_invites + callbacks) - create codes, list, stats
+  - Support Tickets (handle_admin_tickets) - stub for ticket management
+  - Broadcast (handle_admin_broadcast) - stub for broadcast system
+  - FSM states (CreateUserStates, AdminUserStates, InviteStates)
+  - Commit: `1e91ecb` — "feat: ЭТАП 5.3 complete - admin handlers"
+
 ### ⏳ Следующий шаг
 
-- [ ] **ЭТАП 5.3: Admin handlers**
-  - User management (list, extend subscription, set limit, block/unblock)
-  - Statistics dashboard
-  - Invite code management (create, list, stats)
-  - Support tickets management
-  - Broadcast system
+- [ ] **ЭТАП 5.4: Payment handlers**
+  - CryptoBot integration (USDT payments)
+  - Telegram Stars integration
+  - Promo code system
+  - Payment status tracking via webhooks
 
 ### 🔜 Планируется
 
@@ -160,6 +173,8 @@
 ## Статус коммитов
 
 ```
+1e91ecb [feat] ЭТАП 5.3 complete - admin handlers
+5dd33df [docs] Update CLAUDE.md and TASKS.md - ЭТАП 5.2 complete
 51378a1 [feat] ЭТАП 5.2 complete - other user handlers
 70c5981 [fix] Fix callback indentation in handle_ticket_category
 c8af5ff [fix] Fix imports for Docker container - add scripts. prefix
