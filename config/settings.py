@@ -51,6 +51,9 @@ class Settings(BaseSettings):
     def hiddify_api_url(self) -> str:
         """Construct Hiddify API URL."""
         domain = self.panel_domain.rstrip("/")
+        # Add protocol if missing
+        if not domain.startswith(("http://", "https://")):
+            domain = f"https://{domain}"
         if not domain.endswith("/api"):
             domain = f"{domain}/api" if domain.endswith("/") else f"{domain}/api"
         return domain
