@@ -73,10 +73,13 @@ class AsyncHiddifyAPI:
     @property
     def headers(self) -> Dict[str, str]:
         """Заголовки для API запросов"""
-        return {
-            "Authorization": f"Bearer {self.token}",
+        headers = {
             "Content-Type": "application/json"
         }
+        # Only add Authorization if token is set and not a default test value
+        if self.token and self.token != "test_api_token":
+            headers["Authorization"] = f"Bearer {self.token}"
+        return headers
 
     async def get_client(self) -> httpx.AsyncClient:
         """
