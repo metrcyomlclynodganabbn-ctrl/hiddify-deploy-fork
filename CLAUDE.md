@@ -79,19 +79,29 @@ v4.0.0 (Telebot) → v5.0.0 (Aiogram 3) миграция завершена.
   - Local development guide (docs/LOCAL_DEVELOPMENT.md)
   - Deployment script (scripts/deploy-production.sh)
 - ✅ ЭТАП 4-6: Aiogram 3 Architecture - ПОЛНОСТЬЮ ЗАВЕРШЕНА!
-- ✅ ЭТАП 7: Production deployment & monitoring (completed 2026-03-04)
-  - 7.1: ✅ Deploy bot to production server (5.45.114.73)
-  - 7.2: ✅ Run SQLite → PostgreSQL migration
-  - 7.3: ✅ Smoke testing with real users
-  - 7.4: ⏳ Setup monitoring (Prometheus/Grafana dashboards) - planned
-  - 7.5: ⏳ Enable webhooks (CryptoBot + Telegram Stars) - planned
-- ✅ Анализ и документация v5.0.0 (completed 2026-03-04)
-  - ✅ IMPLEMENTATION_REPORT_v5.0.0.md - План vs Реализация
-  - ✅ TESTING_REPORT_v5.0.0.md - Тестирование функционала
-  - ✅ ANALYSIS_SUMMARY_v5.0.0.md - Итоговое резюме
-  - ✅ Все 13 этапов проверены: 100% реализовано
+- ⏳ ЭТАП 7: Production deployment & monitoring (частично завершён 2026-03-21)
+  - 7.1: ✅ Deploy bot to production server (5.45.114.73) - работает
+  - 7.2: ⏳ Run SQLite → PostgreSQL migration - не требуется (нет данных)
+  - 7.3: ⏳ Smoke testing - требуется настройка токенов
+  - 7.4: ⏳ Setup monitoring dashboards - Grafana работает, дашборды нет
+  - 7.5: ❌ Enable webhooks - требуется CRYPTOBOT_API_TOKEN
 
-**✅ Миграция Telebot → Aiogram 3 ПОЛНОСТЬЮ ЗАВЕРШЕНА!**
+**Production status:**
+- ✅ Bot: running on Aiogram 3 (polling mode)
+- ✅ DB: PostgreSQL connected
+- ✅ Cache: Redis connected
+- ⚠️ Payments: require HIDDIFY_API_TOKEN and CRYPTOBOT_API_TOKEN
+- ❌ Monitoring: Prometheus metrics endpoint not implemented
+- ❌ Webhooks: not started (no CryptoBot token)
+
+**Требует действий:**
+1. Настроить HIDDIFY_API_TOKEN в .env на сервере
+2. Настроить CRYPTOBOT_API_TOKEN в .env на сервере
+3. Реализовать Prometheus metrics endpoint
+4. Настроить Grafana дашборды
+5. Провести полное smoke testing
+
+**✅ Миграция Telebot → Aiogram 3 ЗАВЕРШЕНА (требует доработки для production)**
 
 **Новая точка входа** (v5.0.0):
 - Старый: `scripts/monitor_bot.py` (Telebot) — deprecated

@@ -255,6 +255,34 @@ c8af5ff [fix] Fix imports for Docker container - add scripts. prefix
 
 ## Следующие шаги
 
+### v5.0.0 Production Status (2026-03-21)
+
+**Развернуто:** 5.45.114.73 (kodu-3xui server)
+
+**Работает:**
+- ✅ Aiogram 3 бот запущен (polling mode)
+- ✅ PostgreSQL: connected
+- ✅ Redis: connected
+- ✅ Admin ID: 159595061
+- ✅ Grafana: http://5.45.114.73:3000 (работает)
+- ✅ Prometheus: http://5.45.114.73:9091 (работает)
+
+**Требует настройки:**
+- ⚠️ HIDDIFY_API_TOKEN: не установлен (пустой в .env)
+- ⚠️ CRYPTOBOT_API_TOKEN: не установлен
+- ⚠️ Webhook сервер (порт 8081): не запущен (нет токена)
+- ⚠️ Health endpoints (8080/8081): не отвечают
+- ⚠️ Prometheus metrics endpoint: не реализован
+
+**Действия для полного запуска:**
+1. Настроить HIDDIFY_API_TOKEN в /opt/hiddify-manager/.env
+2. Настроить CRYPTOBOT_API_TOKEN в /opt/hiddify-manager/.env
+3. Перезапустить: docker-compose restart telegram-bot
+4. Настроить Grafana дашборды для мониторинга
+5. Реализовать Prometheus metrics endpoint в bot/main.py
+
+### Legacy v4.0 tasks (deprecated)
+
 1. Investigate & fix health check endpoint (порт 8080)
 2. Настроить переменные окружения для Stripe и Grafana
 3. Протестировать v4.0 функциональность
